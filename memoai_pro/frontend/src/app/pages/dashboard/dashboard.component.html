@@ -1,0 +1,257 @@
+<app-layout>
+  <div class="dashboard-page">
+
+    <!-- ============================= -->
+    <!-- EN-TÊTE AVEC GREETING -->
+    <!-- ============================= -->
+
+    <div class="greeting-section">
+      <div class="greeting-content">
+        <div class="greeting-avatar">
+          <span class="avatar-initials">{{ getInitials() }}</span>
+        </div>
+        <div class="greeting-text">
+          <span class="greeting-time">{{ getGreeting() }} 👋</span>
+          <h1>{{ userName }}</h1>
+          <p class="greeting-subtitle">Voici un aperçu de vos mémoires et projets</p>
+        </div>
+      </div>
+      <button class="btn-create" (click)="createProject()">
+        <span class="btn-icon">➕</span>
+        Nouveau mémoire
+      </button>
+    </div>
+
+    <!-- ============================= -->
+    <!-- CHARGEMENT -->
+    <!-- ============================= -->
+
+    <div class="loading-state" *ngIf="loading">
+      <div class="spinner"></div>
+      <p>Chargement de votre tableau de bord...</p>
+    </div>
+
+    <!-- ============================= -->
+    <!-- ERREUR -->
+    <!-- ============================= -->
+
+    <div class="error-state" *ngIf="error && !loading">
+      <span class="error-icon">⚠️</span>
+      <p>{{ error }}</p>
+      <button class="btn-retry" (click)="loadDashboard()">Réessayer</button>
+    </div>
+
+    <!-- ============================= -->
+    <!-- CONTENU -->
+    <!-- ============================= -->
+
+    <div *ngIf="!loading && !error" class="dashboard-content">
+
+      <!-- =========================== -->
+      <!-- STATISTIQUES -->
+      <!-- =========================== -->
+
+      <div class="stats-grid">
+        <div class="stat-card stat-card-total">
+          <div class="stat-icon-wrapper">
+            <span class="stat-icon">📚</span>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value">{{ stats.total }}</span>
+            <span class="stat-label">Mémoires</span>
+          </div>
+          <div class="stat-trend trend-up">
+            <span>↑ 12%</span>
+          </div>
+        </div>
+
+        <div class="stat-card stat-card-draft">
+          <div class="stat-icon-wrapper">
+            <span class="stat-icon">📝</span>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value">{{ stats.draft }}</span>
+            <span class="stat-label">Brouillons</span>
+          </div>
+          <div class="stat-trend trend-neutral">
+            <span>•</span>
+          </div>
+        </div>
+
+        <div class="stat-card stat-card-progress">
+          <div class="stat-icon-wrapper">
+            <span class="stat-icon">🔄</span>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value">{{ stats.inProgress }}</span>
+            <span class="stat-label">En cours</span>
+          </div>
+          <div class="stat-trend trend-up">
+            <span>↑ 8%</span>
+          </div>
+        </div>
+
+        <div class="stat-card stat-card-completed">
+          <div class="stat-icon-wrapper">
+            <span class="stat-icon">✅</span>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value">{{ stats.completed }}</span>
+            <span class="stat-label">Terminés</span>
+          </div>
+          <div class="stat-trend trend-up">
+            <span>↑ 5%</span>
+          </div>
+        </div>
+
+        <div class="stat-card stat-card-chapters">
+          <div class="stat-icon-wrapper">
+            <span class="stat-icon">📖</span>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value">{{ stats.totalChapters }}</span>
+            <span class="stat-label">Chapitres</span>
+          </div>
+          <div class="stat-trend trend-up">
+            <span>↑ 3%</span>
+          </div>
+        </div>
+
+        <div class="stat-card stat-card-words">
+          <div class="stat-icon-wrapper">
+            <span class="stat-icon">✍️</span>
+          </div>
+          <div class="stat-info">
+            <span class="stat-value">{{ stats.totalWords | number }}</span>
+            <span class="stat-label">Mots écrits</span>
+          </div>
+          <div class="stat-trend trend-up">
+            <span>↑ 15%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- =========================== -->
+      <!-- GRAPHIQUES -->
+      <!-- =========================== -->
+
+      <div class="charts-section">
+        <div class="chart-card">
+          <h3>📊 Répartition des statuts</h3>
+          <canvas #statusChart></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>📈 Évolution des mots écrits</h3>
+          <canvas #progressChart></canvas>
+        </div>
+      </div>
+
+      <!-- =========================== -->
+      <!-- PROJETS RÉCENTS & ACTIVITÉ -->
+      <!-- =========================== -->
+
+      <div class="two-columns">
+        <!-- Projets récents -->
+        <div class="recent-section">
+          <div class="section-header">
+            <h2>📌 Mémoires récents</h2>
+            <a routerLink="/projects" class="view-all">Voir tout →</a>
+          </div>
+
+          <div class="recent-list" *ngIf="recentProjects.length > 0">
+            <div
+              class="recent-item"
+              *ngFor="let project of recentProjects"
+              (click)="openProject(project.id!)"
+            >
+              <div class="recent-item-left">
+                <div class="recent-item-icon">
+                  <span>{{ getStatusLabel(project.status || 'draft') }}</span>
+                </div>
+                <div class="recent-item-info">
+                  <h4>{{ project.title }}</h4>
+                  <p>{{ project.theme || 'Sans thème' }}</p>
+                </div>
+              </div>
+              <div class="recent-item-right">
+                <span class="status-badge" [class]="getStatusClass(project.status || 'draft')">
+                  {{ getStatusLabel(project.status || 'draft') }}
+                </span>
+                <span class="recent-date">
+                  {{ project.updated_at | date:'dd/MM/yyyy' }}
+                </span>
+                <span class="recent-arrow">→</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="empty-recent" *ngIf="recentProjects.length === 0">
+            <span class="empty-icon">🚀</span>
+            <h3>Aucun mémoire</h3>
+            <p>Commencez votre premier mémoire dès maintenant</p>
+            <button class="btn-primary" (click)="createProject()">
+              + Créer un mémoire
+            </button>
+          </div>
+        </div>
+
+        <!-- Activité récente -->
+        <div class="activity-section">
+          <div class="section-header">
+            <h2>🕐 Activité récente</h2>
+          </div>
+
+          <div class="activity-list">
+            <div class="activity-item" *ngFor="let activity of recentActivity; let last = last">
+              <div class="activity-timeline">
+                <div class="activity-dot" [class]="activity.type === 'create' ? 'dot-create' : 'dot-update'"></div>
+                <div class="activity-line" *ngIf="!last"></div>
+              </div>
+              <div class="activity-content">
+                <p>{{ activity.message }}</p>
+                <span class="activity-time">{{ activity.date | date:'dd/MM/yyyy HH:mm' }}</span>
+              </div>
+            </div>
+
+            <div class="empty-activity" *ngIf="recentActivity.length === 0">
+              <span class="empty-icon">📭</span>
+              <p>Aucune activité récente</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =========================== -->
+      <!-- ACTIONS RAPIDES -->
+      <!-- =========================== -->
+
+      <div class="quick-actions">
+        <h2>⚡ Actions rapides</h2>
+        <div class="actions-grid">
+          <div class="action-card" (click)="createProject()">
+            <div class="action-card-icon">📝</div>
+            <span class="action-card-label">Nouveau mémoire</span>
+            <span class="action-card-desc">Créez un nouveau projet</span>
+          </div>
+          <div class="action-card" routerLink="/projects">
+            <div class="action-card-icon">📚</div>
+            <span class="action-card-label">Voir mes mémoires</span>
+            <span class="action-card-desc">Accédez à tous vos projets</span>
+          </div>
+          <div class="action-card" routerLink="/profile">
+            <div class="action-card-icon">👤</div>
+            <span class="action-card-label">Mon profil</span>
+            <span class="action-card-desc">Gérez vos informations</span>
+          </div>
+          <div class="action-card">
+            <div class="action-card-icon">🤖</div>
+            <span class="action-card-label">Aide IA</span>
+            <span class="action-card-desc">Obtenez de l'aide</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</app-layout>

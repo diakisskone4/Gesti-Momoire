@@ -1,0 +1,253 @@
+<app-layout>
+
+  <div class="editor-page">
+
+    <a class="back-link" routerLink="/projects">
+      ← Mes mémoires
+    </a>
+
+    <span class="eyebrow">
+      ÉDITEUR DE MÉMOIRE
+    </span>
+
+    <div class="title-row" *ngIf="project">
+      <div>
+        <h2>{{ project.title }}</h2>
+        <p class="project-theme" *ngIf="project.theme">
+          {{ project.theme }}
+        </p>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="secondary" (click)="addChapter()">
+          + Ajouter un chapitre
+        </button>
+
+        <button type="button" class="secondary" (click)="openCollaborationModal()">
+          👥 Collaborer
+        </button>
+
+        <button type="button" class="secondary" (click)="openReferencesModal()">
+          📚 Bibliographie
+        </button>
+
+        <button type="button" class="secondary" (click)="openExportModal()">
+          📥 Exporter
+        </button>
+
+        <button
+          type="button"
+          class="primary"
+          [disabled]="generatingPlan || !project"
+          (click)="generatePlan()"
+        >
+          {{ generatingPlan ? 'Génération...' : '✦ Générer le plan avec IA' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="loading" *ngIf="loading">
+      <div class="spinner"></div>
+      <p style="font-size: 16px; font-weight: 500;">Chargement du mémoire...</p>
+      <p style="font-size: 12px; color: #9aa8a6;">Veuillez patienter</p>
+    </div>
+
+    <div class="message success" *ngIf="message && !loading">
+      ✓ {{ message }}
+    </div>
+
+    <div class="message error" *ngIf="error && !loading">
+      ⚠ {{ error }}
+    </div>
+
+    <div class="error-container" *ngIf="!loading && error && !project">
+      <p>❌ {{ error }}</p>
+      <button class="primary" (click)="loadProjectAndChapters()">
+        Réessayer
+      </button>
+      <button class="secondary" (click)="backToProjects()" style="margin-left: 10px;">
+        Retour aux mémoires
+      </button>
+    </div>
+
+    <div class="editor-layout" *ngIf="!loading && project">
+      <aside class="chapters">
+        <div class="chapters-header">
+          <h3>Plan du mémoire</h3>
+          <button
+            type="button"
+            class="add-button"
+            title="Ajouter un chapitre"
+            (click)="addChapter()"
+          >
+            +
+          </button>
+        </div>
+
+        <div style="font-size: 13px; font-weight: 600; color: #0f766e; padding: 8px 0; border-bottom: 2px solid #0f766e; margin-bottom: 12px;">
+          📚 {{ chapters.length }} chapitre(s)
+        </div>
+
+        <div class="chapter-list" *ngIf="chapters.length > 0">
+          <button
+            type="button"
+            class="chapter-item"
+            *ngFor="let chapter of chapters; let i = index"
+            [class.selected]="selected?.id === chapter.id"
+            (click)="selectChapter(chapter)"
+          >
+            <span class="chapter-number">{{ i + 1 }}</span>
+            <span>{{ chapter.title }}</span>
+          </button>
+        </div>
+
+        <div class="empty-chapters" *ngIf="chapters.length === 0">
+          <p>Aucun chapitre n'a encore été créé.</p>
+          <button type="button" class="primary" (click)="addChapter()">
+            + Créer le premier chapitre
+          </button>
+        </div>
+
+        <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #f0f5f4; display: flex; gap: 8px; flex-wrap: wrap;">
+          <button 
+            type="button" 
+            class="secondary" 
+            (click)="refreshChapters()"
+            style="font-size: 11px; padding: 6px 12px;"
+          >
+            🔄 Rafraîchir
+          </button>
+          <button 
+            type="button" 
+            class="secondary" 
+            (click)="addChapter()"
+            style="font-size: 11px; padding: 6px 12px;"
+          >
+            ➕ Nouveau chapitre
+          </button>
+          <button 
+            type="button" 
+            class="secondary" 
+            (click)="openCollaborationModal()"
+            style="font-size: 11px; padding: 6px 12px;"
+          >
+            👥 Collaborer
+          </button>
+          <button 
+            type="button" 
+            class="secondary" 
+            (click)="openReferencesModal()"
+            style="font-size: 11px; padding: 6px 12px;"
+          >
+            📚 Bibliographie
+          </button>
+          <button 
+            type="button" 
+            class="secondary" 
+            (click)="openExportModal()"
+            style="font-size: 11px; padding: 6px 12px;"
+          >
+            📥 Exporter
+          </button>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <div class="empty-chapters" *ngIf="!selected && chapters.length > 0">
+          <h3>Sélectionnez un chapitre</h3>
+          <p>Choisissez un chapitre dans la liste de gauche pour commencer à rédiger.</p>
+        </div>
+
+        <div class="empty-chapters" *ngIf="!selected && chapters.length === 0">
+          <h3>Commencez votre mémoire</h3>
+          <p>
+            Créez un chapitre ou générez automatiquement
+            un plan avec l'intelligence artificielle.
+          </p>
+          <button
+            type="button"
+            class="primary"
+            [disabled]="generatingPlan"
+            (click)="generatePlan()"
+          >
+            {{ generatingPlan ? 'Génération...' : '✦ Générer le plan' }}
+          </button>
+        </div>
+
+        <div *ngIf="selected">
+          <div class="workspace-header">
+            <div>
+              <h3>{{ selected.title }}</h3>
+            </div>
+            <span class="status">{{ selected.status }}</span>
+          </div>
+
+          <label class="field-label">
+            <label for="chapterTitle">Titre du chapitre</label>
+            <input
+              id="chapterTitle"
+              type="text"
+              [(ngModel)]="selected.title"
+              placeholder="Titre du chapitre"
+            />
+          </label>
+
+          <label class="field-label">
+            <label for="chapterContent">Contenu du chapitre</label>
+            <textarea
+              id="chapterContent"
+              class="content-editor"
+              [(ngModel)]="selected.content"
+              placeholder="Commencez à rédiger votre chapitre..."
+            ></textarea>
+          </label>
+
+          <div class="editor-actions">
+            <button type="button" class="secondary" (click)="renameChapter()">
+              Renommer
+            </button>
+
+            <button
+              type="button"
+              class="primary"
+              [disabled]="saving"
+              (click)="saveChapter()"
+            >
+              {{ saving ? 'Sauvegarde...' : '✓ Sauvegarder' }}
+            </button>
+          </div>
+
+          <div *ngIf="message && !loading" class="message success">
+            ✓ {{ message }}
+          </div>
+          <div *ngIf="error && !loading" class="message error">
+            ⚠ {{ error }}
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </div>
+
+  <app-export-modal
+    *ngIf="showExportModal"
+    [projectId]="projectId"
+    [projectTitle]="project?.title || 'Mémoire'"
+    (close)="onExportClose()"
+    (exported)="onExportSuccess($event)"
+  ></app-export-modal>
+
+  <app-references-modal
+    *ngIf="showReferencesModal"
+    [projectId]="projectId"
+    (close)="onReferencesClose()"
+    (referencesUpdated)="onReferencesUpdated($event)"
+  ></app-references-modal>
+
+  <app-collaboration-modal
+    *ngIf="showCollaborationModal"
+    [projectId]="projectId"
+    (close)="onCollaborationClose()"
+  ></app-collaboration-modal>
+
+</app-layout>

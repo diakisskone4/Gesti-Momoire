@@ -1,0 +1,205 @@
+/* ============================================================
+   VARIABLES - CLAIR
+   ============================================================ */
+
+:root {
+  --bg-primary: #f6f8fb;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #fbfdfd;
+  --bg-hover: #f0f5f4;
+  
+  --text-primary: #173e3a;
+  --text-secondary: #39514e;
+  --text-muted: #748482;
+  --text-light: #9aa8a6;
+  
+  --border-color: #e5eceb;
+  --border-light: #f0f5f4;
+  
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.08);
+  
+  --gradient-start: #0f766e;
+  --gradient-end: #0d9488;
+  
+  --success: #d1fae5;
+  --success-text: #065f46;
+  --error: #fff1f2;
+  --error-text: #be123c;
+  --warning: #fef3c7;
+  --warning-text: #92400e;
+  --info: #dbeafe;
+  --info-text: #1e40af;
+}
+
+/* ============================================================
+   VARIABLES - SOMBRE
+   ============================================================ */
+
+.dark-theme {
+  --bg-primary: #0f1724;
+  --bg-secondary: #1a2332;
+  --bg-card: #1e2a3a;
+  --bg-input: #243040;
+  --bg-hover: #2a3a4a;
+  
+  --text-primary: #e8edf2;
+  --text-secondary: #c8d0d8;
+  --text-muted: #8a9aaa;
+  --text-light: #6a7a8a;
+  
+  --border-color: #2a3a4a;
+  --border-light: #1a2a3a;
+  
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.4);
+  
+  --success: #064e3b;
+  --success-text: #34d399;
+  --error: #4a1a1a;
+  --error-text: #f87171;
+  --warning: #4a3a0a;
+  --warning-text: #fbbf24;
+  --info: #1a2a4a;
+  --info-text: #60a5fa;
+}
+
+/* ============================================================
+   TRANSITION GLOBALE
+   ============================================================ */
+
+* {
+  transition: background-color 0.3s ease, 
+              color 0.3s ease, 
+              border-color 0.3s ease,
+              box-shadow 0.3s ease;
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ============================================================
+   BODY
+   ============================================================ */
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* ============================================================
+   ADAPTATION DES COMPOSANTS
+   ============================================================ */
+
+/* Cards */
+.dark-theme .project-card,
+.dark-theme .stat-card,
+.dark-theme .recent-card,
+.dark-theme .profile-card,
+.dark-theme .chapters,
+.dark-theme .workspace,
+.dark-theme .modal-content,
+.dark-theme .action-card,
+.dark-theme .chart-card {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+/* Inputs */
+.dark-theme input,
+.dark-theme select,
+.dark-theme textarea,
+.dark-theme .search-input {
+  background: var(--bg-input);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.dark-theme input:focus,
+.dark-theme select:focus,
+.dark-theme textarea:focus,
+.dark-theme .search-input:focus {
+  background: var(--bg-secondary);
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.2);
+}
+
+/* Loading spinner */
+.dark-theme .spinner {
+  border-color: var(--border-color);
+  border-top-color: #0f766e;
+}
+
+/* Empty states */
+.dark-theme .empty-state,
+.dark-theme .empty-recent {
+  background: var(--bg-input);
+  border-color: var(--border-color);
+}
+
+/* Buttons secondary */
+.dark-theme .btn-secondary {
+  background: var(--bg-input);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+.dark-theme .btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: #0f766e;
+  color: #0f766e;
+}
+
+/* Status badges */
+.dark-theme .status-draft {
+  background: #1a2a3a;
+  color: #8a9aaa;
+}
+
+.dark-theme .status-progress {
+  background: #1a2a4a;
+  color: #60a5fa;
+}
+
+.dark-theme .status-review {
+  background: #4a3a0a;
+  color: #fbbf24;
+}
+
+.dark-theme .status-completed {
+  background: #064e3b;
+  color: #34d399;
+}
+
+/* Stat cards */
+.dark-theme .stat-card-total .stat-icon-wrapper { background: #064e3b; }
+.dark-theme .stat-card-draft .stat-icon-wrapper { background: #4a3a0a; }
+.dark-theme .stat-card-progress .stat-icon-wrapper { background: #1a2a4a; }
+.dark-theme .stat-card-completed .stat-icon-wrapper { background: #064e3b; }
+.dark-theme .stat-card-chapters .stat-icon-wrapper { background: #3a1a4a; }
+.dark-theme .stat-card-words .stat-icon-wrapper { background: #4a1a3a; }
+
+.dark-theme .stat-card .stat-value { color: var(--text-primary); }
+.dark-theme .stat-card .stat-label { color: var(--text-muted); }

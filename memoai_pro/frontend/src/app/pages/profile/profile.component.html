@@ -1,0 +1,168 @@
+<app-layout>
+  <div class="profile-page">
+    
+    <!-- En-tête -->
+    <div class="page-header">
+      <div>
+        <span class="eyebrow">MON COMPTE</span>
+        <h1>Mon profil</h1>
+        <p class="subtitle">Gérez vos informations personnelles</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn-secondary" (click)="refresh()" *ngIf="!editMode">
+          🔄 Rafraîchir
+        </button>
+        <button 
+          class="btn-secondary" 
+          (click)="toggleEditMode()"
+          *ngIf="!editMode"
+        >
+          ✏️ Modifier
+        </button>
+        <button 
+          class="btn-danger" 
+          (click)="logout()"
+        >
+          🚪 Déconnexion
+        </button>
+      </div>
+    </div>
+
+    <!-- Chargement -->
+    <div class="loading-state" *ngIf="loading">
+      <div class="spinner"></div>
+      <p>Chargement de votre profil...</p>
+      <p style="font-size: 12px; color: #9aa8a6; margin-top: 10px;">
+        Si le chargement persiste, vérifiez que le serveur Django est démarré
+      </p>
+    </div>
+
+    <!-- Erreur -->
+    <div class="error-message" *ngIf="error && !loading">
+      ⚠ {{ error }}
+      <button class="btn-secondary" (click)="refresh()" style="margin-left: 10px;">Réessayer</button>
+    </div>
+
+    <!-- Message de succès -->
+    <div class="success-message" *ngIf="message && !loading">
+      ✓ {{ message }}
+    </div>
+
+    <!-- Profil -->
+    <div class="profile-card" *ngIf="!loading && !error && user">
+      
+      <!-- Avatar -->
+      <div class="profile-avatar">
+        <div class="avatar-circle">
+          <span class="avatar-text">{{ userInitials }}</span>
+        </div>
+        <div class="avatar-info">
+          <h2>{{ fullName }}</h2>
+          <p class="avatar-email">{{ user.email }}</p>
+          <span class="avatar-role">{{ user.role || 'Étudiant' }}</span>
+        </div>
+      </div>
+
+      <!-- Formulaire -->
+      <form (ngSubmit)="saveProfile()" class="profile-form">
+        <div class="form-section">
+          <h3>Informations personnelles</h3>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="firstName">Prénom</label>
+              <input
+                id="firstName"
+                type="text"
+                [(ngModel)]="profileForm.first_name"
+                name="firstName"
+                [disabled]="!editMode"
+                placeholder="Votre prénom"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="lastName">Nom</label>
+              <input
+                id="lastName"
+                type="text"
+                [(ngModel)]="profileForm.last_name"
+                name="lastName"
+                [disabled]="!editMode"
+                placeholder="Votre nom"
+              />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              [(ngModel)]="profileForm.email"
+              name="email"
+              [disabled]="!editMode"
+              placeholder="votre@email.com"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="phone">Téléphone</label>
+            <input
+              id="phone"
+              type="tel"
+              [(ngModel)]="profileForm.phone"
+              name="phone"
+              [disabled]="!editMode"
+              placeholder="+33 6 12 34 56 78"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="language">Langue préférée</label>
+            <select
+              id="language"
+              [(ngModel)]="profileForm.language"
+              name="language"
+              [disabled]="!editMode"
+            >
+              <option *ngFor="let lang of languages" [value]="lang.value">
+                {{ lang.label }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="form-actions" *ngIf="editMode">
+          <button 
+            type="button" 
+            class="btn-secondary" 
+            (click)="toggleEditMode()"
+          >
+            Annuler
+          </button>
+          <button 
+            type="submit" 
+            class="btn-primary" 
+            [disabled]="saving"
+          >
+            {{ saving ? 'Sauvegarde...' : '💾 Sauvegarder les modifications' }}
+          </button>
+        </div>
+      </form>
+
+      <!-- Sécurité -->
+      <div class="security-section">
+        <h3>Sécurité</h3>
+        <div class="security-actions">
+          <button class="btn-secondary" (click)="changePassword()">
+            🔒 Changer le mot de passe
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</app-layout>

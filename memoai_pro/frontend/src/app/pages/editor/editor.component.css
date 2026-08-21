@@ -1,0 +1,691 @@
+/* ============================================================
+   HOST
+   ============================================================ */
+
+:host {
+  display: block;
+}
+
+
+/* ============================================================
+   PAGE
+   ============================================================ */
+
+.editor-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+
+/* ============================================================
+   BACK LINK
+   ============================================================ */
+
+.back-link {
+  color: #70807f;
+  text-decoration: none;
+  font-size: 12px;
+  transition: color 0.2s;
+}
+
+.back-link:hover {
+  color: #0f766e;
+}
+
+
+/* ============================================================
+   EYEBROW
+   ============================================================ */
+
+.eyebrow {
+  display: block;
+  margin-top: 20px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #0f766e;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+
+/* ============================================================
+   TITLE ROW
+   ============================================================ */
+
+.title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+  margin-top: 5px;
+}
+
+
+/* ============================================================
+   TITRE
+   ============================================================ */
+
+h2 {
+  margin: 0;
+  color: #173e3a;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.project-theme {
+  margin-top: 8px;
+  color: #748482;
+  font-size: 13px;
+}
+
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+
+/* ============================================================
+   BOUTONS
+   ============================================================ */
+
+button {
+  border: none;
+  border-radius: 9px;
+  padding: 11px 16px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.primary {
+  background: #0f766e;
+  color: white;
+}
+
+.primary:hover:not(:disabled) {
+  background: #0b625c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.3);
+}
+
+.primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.secondary {
+  background: #e8f2f0;
+  color: #173e3a;
+}
+
+.secondary:hover:not(:disabled) {
+  background: #dceae7;
+  transform: translateY(-1px);
+}
+
+
+/* ============================================================
+   ÉDITEUR LAYOUT
+   ============================================================ */
+
+.editor-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+  margin-top: 25px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+
+/* ============================================================
+   PANEL CHAPITRES
+   ============================================================ */
+
+.chapters {
+  background: #ffffff;
+  border: 1px solid #e5eceb;
+  border-radius: 17px;
+  padding: 18px;
+  min-height: 500px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.chapters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.chapters-header h3 {
+  margin: 0;
+  color: #173e3a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+
+/* ============================================================
+   BOUTON AJOUTER
+   ============================================================ */
+
+.add-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  background: #0f766e;
+  color: white;
+  font-size: 18px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.add-button:hover {
+  background: #0b625c;
+  transform: scale(1.05);
+}
+
+.add-button:active {
+  transform: scale(0.95);
+}
+
+
+/* ============================================================
+   LISTE CHAPITRES
+   ============================================================ */
+
+.chapter-list {
+  display: grid;
+  gap: 7px;
+}
+
+.chapter-item {
+  width: 100%;
+  text-align: left;
+  background: #f8fbfa;
+  color: #39514e;
+  border: 1px solid transparent;
+  padding: 11px;
+  border-radius: 9px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  font-size: 12px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.chapter-item:hover {
+  background: #eef7f5;
+  transform: translateX(3px);
+}
+
+.chapter-item.selected {
+  background: #e5f3f0;
+  border-color: #0f766e;
+  color: #0f766e;
+  font-weight: 600;
+}
+
+.chapter-number {
+  display: inline-block;
+  width: 28px;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+
+/* ============================================================
+   EMPTY CHAPTERS
+   ============================================================ */
+
+.empty-chapters {
+  color: #748482;
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 20px 5px;
+  text-align: center;
+}
+
+.empty-chapters h3 {
+  color: #173e3a;
+  font-size: 16px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+.empty-chapters p {
+  margin: 0 0 15px 0;
+}
+
+.empty-chapters .primary {
+  margin-top: 5px;
+}
+
+
+/* ============================================================
+   WORKSPACE
+   ============================================================ */
+
+.workspace {
+  background: #ffffff;
+  border: 1px solid #e5eceb;
+  border-radius: 17px;
+  padding: 25px;
+  min-height: 500px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+
+/* ============================================================
+   WORKSPACE HEADER
+   ============================================================ */
+
+.workspace-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f0f5f4;
+}
+
+.workspace-header h3 {
+  margin: 0;
+  color: #173e3a;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.status {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 6px 9px;
+  border-radius: 20px;
+  background: #f1f5f4;
+  color: #70807f;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+
+/* ============================================================
+   FIELD LABEL
+   ============================================================ */
+
+.field-label {
+  display: block;
+  margin-top: 15px;
+}
+
+.field-label label {
+  display: block;
+  margin-bottom: 5px;
+  color: #39514e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.field-label input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #dce7e5;
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  background: #fbfdfd;
+}
+
+.field-label input:focus {
+  border-color: #0f766e;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+  background: #ffffff;
+}
+
+
+/* ============================================================
+   CONTENT EDITOR
+   ============================================================ */
+
+.content-editor {
+  width: 100%;
+  min-height: 380px;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 18px;
+  border: 1px solid #dce7e5;
+  border-radius: 12px;
+  background: #fbfdfd;
+  outline: none;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.7;
+  transition: all 0.2s ease;
+  color: #1a2e2b;
+}
+
+.content-editor:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+  background: #ffffff;
+}
+
+.content-editor::placeholder {
+  color: #b0c0be;
+}
+
+
+/* ============================================================
+   EDITOR ACTIONS
+   ============================================================ */
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #f0f5f4;
+}
+
+
+/* ============================================================
+   MESSAGES
+   ============================================================ */
+
+.message {
+  margin-top: 15px;
+  padding: 11px 15px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 500;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.message small {
+  color: #9aa8a6;
+  font-weight: normal;
+}
+
+.success {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+.error {
+  background: #fff1f2;
+  color: #be123c;
+  border: 1px solid #fecdd3;
+}
+
+
+/* ============================================================
+   LOADING
+   ============================================================ */
+
+.loading {
+  padding: 60px 30px;
+  text-align: center;
+  color: #748482;
+}
+
+.loading .spinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 20px;
+  border: 4px solid #e5eceb;
+  border-top-color: #0f766e;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading p {
+  margin: 5px 0;
+}
+
+.loading p:last-child {
+  font-size: 12px;
+  color: #9aa8a6;
+}
+
+
+/* ============================================================
+   ERROR CONTAINER
+   ============================================================ */
+
+.error-container {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.error-container p {
+  color: #be123c;
+  font-size: 18px;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+
+.error-container button {
+  margin: 0 5px;
+}
+
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* ============================================================
+   RESPONSIVE - TABLETTE
+   ============================================================ */
+
+@media (max-width: 850px) {
+  .editor-layout {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .chapters {
+    min-height: auto;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .title-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .actions button {
+    flex: 1;
+    text-align: center;
+  }
+
+  .workspace {
+    min-height: 400px;
+  }
+
+  .content-editor {
+    min-height: 250px;
+  }
+
+  /* Scrollbar styling */
+  .chapters::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .chapters::-webkit-scrollbar-track {
+    background: #f1f5f4;
+    border-radius: 3px;
+  }
+
+  .chapters::-webkit-scrollbar-thumb {
+    background: #d0dbd9;
+    border-radius: 3px;
+  }
+
+  .chapters::-webkit-scrollbar-thumb:hover {
+    background: #b0c0be;
+  }
+}
+
+
+/* ============================================================
+   RESPONSIVE - MOBILE
+   ============================================================ */
+
+@media (max-width: 600px) {
+  .editor-page {
+    padding: 0 10px;
+  }
+
+  h2 {
+    font-size: 24px;
+  }
+
+  .workspace {
+    padding: 16px;
+  }
+
+  .chapters {
+    padding: 14px;
+  }
+
+  .editor-actions {
+    flex-direction: column;
+  }
+
+  .editor-actions button {
+    width: 100%;
+    text-align: center;
+  }
+
+  .workspace-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .workspace-header h3 {
+    font-size: 16px;
+  }
+
+  .content-editor {
+    min-height: 200px;
+    padding: 12px;
+    font-size: 13px;
+  }
+
+  .field-label input {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+
+  .loading {
+    padding: 40px 20px;
+  }
+
+  .loading .spinner {
+    width: 30px;
+    height: 30px;
+  }
+
+  .error-container p {
+    font-size: 15px;
+  }
+
+  .error-container button {
+    display: block;
+    width: 100%;
+    margin: 5px 0;
+  }
+}
+
+
+/* ============================================================
+   RESPONSIVE - TRÈS PETIT MOBILE
+   ============================================================ */
+
+@media (max-width: 400px) {
+  .editor-page {
+    padding: 0 8px;
+  }
+
+  h2 {
+    font-size: 20px;
+  }
+
+  .eyebrow {
+    font-size: 8px;
+    margin-top: 12px;
+  }
+
+  .chapter-item {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .chapter-number {
+    width: 22px;
+    font-size: 10px;
+  }
+
+  .status {
+    font-size: 8px;
+    padding: 4px 7px;
+  }
+
+  button {
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+}
