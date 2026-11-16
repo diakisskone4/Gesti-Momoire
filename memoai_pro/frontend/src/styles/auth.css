@@ -1,0 +1,142 @@
+/* Pages de connexion / inscription — palette MemoAI (vert sarcelle). */
+.scope-auth{
+  --teal:#0f766e;--teal-hover:#0d6b63;--teal-soft:#e7f5f3;--mint:#5eead4;--amber:#fbbf24;
+  --ink:#143d38;--label:#334b48;--muted:#70807f;--line:#dce5e4;--field:#fbfdfd;
+  display:block;
+}
+
+.scope-auth .auth-page{min-height:100vh;display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);background:#fff;color:var(--ink)}
+
+/* ---------- Panneau visuel ---------- */
+.scope-auth .visual{position:sticky;top:0;height:100vh;overflow:hidden;color:#fff;
+  background:radial-gradient(circle at 75% 20%,#1c6b62 0,#0a3c37 40%,#062b28 100%)}
+.scope-auth .visual:before,.scope-auth .visual:after{content:"";position:absolute;border-radius:50%;pointer-events:none}
+.scope-auth .visual:after{width:460px;height:460px;border:1px solid #5eead455;right:-180px;bottom:-180px;
+  box-shadow:0 0 0 70px #5eead412,0 0 0 140px #5eead408}
+.scope-auth .visual:before{width:260px;height:260px;left:-120px;top:-120px;border:1px solid #5eead433}
+.scope-auth .visual-inner{position:relative;z-index:1;height:100%;box-sizing:border-box;display:flex;flex-direction:column;
+  padding:44px clamp(32px,7vw,96px)}
+.scope-auth .visual-body{margin:auto 0;max-width:540px}
+
+.scope-auth .brand,.scope-auth .mobile-brand{display:inline-flex;align-items:center;gap:11px;text-decoration:none;color:inherit}
+.scope-auth .brand-mark{flex:none;display:block;border-radius:11px;box-shadow:0 8px 20px #0003,0 0 0 1px #ffffff1f}
+.scope-auth .brand-name{font-size:18px;font-weight:600;letter-spacing:-.3px}
+.scope-auth .brand-name b{color:var(--mint);font-weight:800}
+
+.scope-auth .pill{display:inline-block;padding:7px 12px;border:1px solid #ffffff25;background:#ffffff0c;border-radius:30px;
+  font-size:10px;letter-spacing:2px;color:#a9e5dd;text-transform:uppercase}
+.scope-auth .visual h1{font-size:clamp(34px,3.6vw,50px);line-height:1.06;margin:22px 0 16px;letter-spacing:-1.5px;font-weight:800}
+.scope-auth .visual h1 em{color:var(--mint);font-style:normal}
+.scope-auth .lead{color:#c4e3df;line-height:1.75;font-size:15px;margin:0 0 26px}
+
+.scope-auth .features{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.scope-auth .features li{display:flex;gap:12px;align-items:flex-start;color:#e4f4f2;font-size:14px;line-height:1.5}
+.scope-auth .check{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:900;
+  background:#5eead41f;color:var(--mint);border:1px solid #5eead44d}
+
+.scope-auth .quote{margin:32px 0 0;max-width:440px;border-left:3px solid var(--amber);padding:12px 18px;background:#ffffff08;border-radius:0 12px 12px 0}
+.scope-auth .quote blockquote{margin:0;color:#e4f4f2;font-size:13px;line-height:1.6}
+
+/* ---------- Zone formulaire ---------- */
+.scope-auth .form-side{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px 40px}
+.scope-auth .mobile-brand{display:none}
+.scope-auth .form-box{width:min(440px,100%)}
+.scope-auth .form-box.wide{width:min(580px,100%)}
+
+/* Onglets Connexion / Inscription */
+.scope-auth .tabs{display:grid;grid-template-columns:1fr 1fr;padding:4px;margin-bottom:30px;border-radius:12px;background:#f1f6f5;border:1px solid #e6efee}
+.scope-auth .tabs a{padding:10px;text-align:center;border-radius:9px;font-size:13px;font-weight:700;color:var(--muted);text-decoration:none;transition:background .15s,color .15s}
+.scope-auth .tabs a:hover{color:var(--ink)}
+.scope-auth .tabs a.active{background:#fff;color:var(--teal);box-shadow:0 1px 3px #0f766e1f,0 4px 12px #0f766e0f}
+
+.scope-auth .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:10px;letter-spacing:2px;color:var(--teal);font-weight:800;text-transform:uppercase}
+.scope-auth .form-box h2{font-size:clamp(26px,3vw,32px);margin:8px 0 8px;color:var(--ink);letter-spacing:-.6px}
+.scope-auth .sub{color:var(--muted);margin:0 0 26px;line-height:1.6;font-size:14px}
+
+.scope-auth .role-chip{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:24px;border-radius:12px;background:var(--teal-soft);border:1px solid #0f766e22}
+.scope-auth .role-chip .icon{font-size:22px}
+.scope-auth .role-chip strong{display:block;font-size:14px;color:var(--ink)}
+.scope-auth .role-chip small{display:block;font-size:12px;color:var(--muted)}
+.scope-auth .role-chip a{margin-left:auto;font-size:12px;font-weight:700;color:var(--teal);text-decoration:none;white-space:nowrap}
+.scope-auth .role-chip a:hover{text-decoration:underline}
+
+/* Champs */
+.scope-auth form{display:block}
+.scope-auth .field{display:block;margin:0 0 16px;color:var(--label);font-size:12px;font-weight:700}
+.scope-auth .field input,.scope-auth .field select{display:block;width:100%;box-sizing:border-box;height:48px;margin-top:7px;padding:0 14px;
+  border:1px solid var(--line);border-radius:11px;outline:none;font:inherit;font-size:14px;font-weight:400;background:var(--field);color:var(--ink);
+  transition:border-color .15s,box-shadow .15s,background .15s}
+.scope-auth .field input::placeholder{color:#a3b1af}
+.scope-auth .field input:hover,.scope-auth .field select:hover{border-color:#c7d6d4}
+.scope-auth .field input:focus,.scope-auth .field select:focus{border-color:var(--teal);background:#fff;box-shadow:0 0 0 4px #0f766e14}
+.scope-auth .field .hint{display:block;margin-top:6px;font-weight:400;font-size:11.5px;color:#869694;line-height:1.5}
+.scope-auth .req{color:var(--teal)}
+
+.scope-auth .password{position:relative}
+.scope-auth .password input{padding-right:92px}
+.scope-auth .toggle-pw{position:absolute;right:6px;bottom:6px;height:36px;padding:0 12px;border:0;border-radius:8px;background:transparent;
+  color:var(--teal);font:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.scope-auth .toggle-pw:hover{background:var(--teal-soft)}
+
+.scope-auth .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+
+.scope-auth fieldset.group{border:1px solid #e6efee;border-radius:14px;padding:18px 18px 4px;margin:0 0 18px;background:#fcfefe}
+.scope-auth fieldset.group legend{padding:0 8px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--teal);font-weight:800}
+
+/* Actions */
+.scope-auth .primary{position:relative;display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:50px;margin-top:6px;border:0;border-radius:12px;
+  background:var(--teal);color:#fff;font:inherit;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 10px 24px #0f766e2e;transition:background .15s,transform .15s,box-shadow .15s}
+.scope-auth .primary:hover:not(:disabled){background:var(--teal-hover);transform:translateY(-1px);box-shadow:0 14px 28px #0f766e33}
+.scope-auth .primary:disabled{opacity:.65;cursor:default}
+.scope-auth .spinner{width:16px;height:16px;border-radius:50%;border:2px solid #ffffff55;border-top-color:#fff;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.scope-auth .error{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;margin:4px 0 14px;background:#fff1f2;color:#be123c;border:1px solid #fecdd3;border-radius:11px;font-size:13px;line-height:1.5}
+.scope-auth .error a{color:#be123c;font-weight:800}
+
+/* Lien vers l'autre espace */
+.scope-auth .divider{display:flex;align-items:center;gap:12px;margin:28px 0 18px;color:#a3b1af;font-size:11px;letter-spacing:1px;text-transform:uppercase}
+.scope-auth .divider:before,.scope-auth .divider:after{content:"";flex:1;height:1px;background:#e6efee}
+.scope-auth .space-link{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--line);border-radius:13px;text-decoration:none;color:inherit;
+  transition:border-color .15s,box-shadow .15s,transform .15s}
+.scope-auth .space-link:hover,.scope-auth .space-link:focus-visible{border-color:var(--teal);box-shadow:0 6px 18px #0f766e14;transform:translateY(-1px);outline:none}
+.scope-auth .space-link .icon{flex:none;width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:var(--teal-soft);font-size:19px}
+.scope-auth .space-link strong{display:block;font-size:14px;color:var(--ink)}
+.scope-auth .space-link small{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.scope-auth .space-link .go{margin-left:auto;color:var(--teal);font-weight:800;font-size:18px}
+
+/* Choix du rôle (espace enseignants & administration) */
+.scope-auth .roles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.scope-auth .role-card{display:flex;flex-direction:column;gap:10px;padding:18px 16px;border:1px solid var(--line);border-radius:14px;text-decoration:none;color:inherit;
+  background:#fff;transition:border-color .15s,box-shadow .15s,transform .15s}
+.scope-auth .role-card:hover,.scope-auth .role-card:focus-visible{border-color:var(--teal);box-shadow:0 10px 26px #0f766e17;transform:translateY(-2px);outline:none}
+.scope-auth .role-card .icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--teal-soft);font-size:22px}
+.scope-auth .role-card strong{font-size:15px;color:var(--ink);display:flex;justify-content:space-between;align-items:center}
+.scope-auth .role-card strong span{color:var(--teal)}
+.scope-auth .role-card small{font-size:12px;color:var(--muted);line-height:1.5}
+
+.scope-auth .legal{margin:18px 0 0;text-align:center;font-size:11.5px;color:#93a29f;line-height:1.6}
+
+/* ---------- Responsive ---------- */
+@media(max-width:900px){
+  .scope-auth .auth-page{grid-template-columns:minmax(0,1fr)}
+  .scope-auth .form-box,.scope-auth .form-box.wide{width:100%;max-width:440px}
+  .scope-auth .form-box.wide{max-width:580px}
+  .scope-auth .visual{display:none}
+  .scope-auth .form-side{justify-content:flex-start;padding:28px 16px 40px}
+  .scope-auth .mobile-brand{display:flex;width:100%;max-width:440px;margin:0 0 28px;color:var(--ink)}
+  .scope-auth .mobile-brand .brand-name b{color:var(--teal)}
+}
+@media(max-width:560px){
+  .scope-auth .grid,.scope-auth .roles{grid-template-columns:1fr}
+  .scope-auth .role-chip{flex-wrap:wrap}
+}
+@media(prefers-reduced-motion:reduce){.scope-auth *{transition:none!important;animation:none!important}}
+
+/* ---------- Mobile / application installée ---------- */
+.scope-auth .auth-page{min-height:100dvh}
+.scope-auth .visual{height:100dvh}
+@media(max-width:900px){
+  .scope-auth .form-side{padding:calc(20px + var(--safe-top)) calc(16px + var(--safe-right)) calc(40px + var(--safe-bottom)) calc(16px + var(--safe-left))}
+}
+@media(pointer:coarse){.scope-auth .tabs a{padding:12px}}

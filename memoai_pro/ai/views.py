@@ -3,10 +3,24 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
-from celery.result import AsyncResult
-from .tasks import generate_plan_task, generate_diagram_task, generate_chart_task
+from kombu.exceptions import OperationalError
+from .tasks import start_plan_generation, generate_diagram_task, generate_chart_task
 from .services import AIService
 from projects.models import Project
+import logging
+from .services import AIError
+
+logger = logging.getLogger(__name__)
+
+
+def call_ai(fn, *args):
+    """Appelle l'IA ; les erreurs (déjà traduites en AIError par le service)
+    deviennent une réponse lisible, les détails restent dans les logs."""
+    try:
+        return fn(*args), None
+    except AIError as e:
+        headers = {'Retry-After': str(int(e.retry_after))} if e.retry_after else None
+        return None, Response({'error': str(e), 'retry_after': e.retry_after}, status=e.status, headers=headers)
 
 class AIChatView(APIView):
     permission_classes = [IsAuthenticated]
@@ -15,10 +29,9 @@ class AIChatView(APIView):
         project_id = request.data.get('project_id')
         if not message:
             return Response({'error': 'Message required'}, status=400)
-        try:
-            response = AIService.chat(message, project_id, request.user)
-        except Exception as e:
-            return Response({'error': f'AI service error: {str(e)}'}, status=502)
+        response, error = call_ai(AIService.chat, message, project_id, request.user)
+        if error:
+            return error
         return Response({'response': response})
 
 class AIGeneratePlanView(APIView):
@@ -27,16 +40,32 @@ class AIGeneratePlanView(APIView):
         project_id = request.data.get('project_id')
         try:
             project = Project.objects.get(id=project_id, user=request.user)
-        except Project.DoesNotExist:
-            return Response({'error': 'Project not found'}, status=404)
-        if project.status != 'DRAFT':
-            return Response({'error': 'Plan already generated'}, status=400)
-        task = generate_plan_task.delay(project.id, project.theme)
-        from .models import AIGenerationTask
-        ai_task = AIGenerationTask.objects.create(
-            project=project, type='plan', status='PENDING', celery_task_id=task.id
-        )
-        return Response({'task_id': task.id, 'ai_task_id': ai_task.id})
+        except (Project.DoesNotExist, ValueError, TypeError):
+            return Response({'error': 'Mémoire introuvable.'}, status=404)
+        return plan_generation_response(project)
+
+
+def plan_generation_response(project):
+    """Lance la génération du plan et renvoie son suivi (statut, erreur, résultat).
+    Réservé aux mémoires avec un modèle acheté et sans texte déjà rédigé."""
+    from .generation import check_plan_allowed
+    check_plan_allowed(project)
+    try:
+        ai_task = start_plan_generation(project)
+    except OperationalError:
+        logger.error('Celery broker unreachable: plan generation not queued')
+        return Response({'error': 'Le service de génération est indisponible (file de tâches Redis arrêtée). Réessayez plus tard.'}, status=503)
+    return Response(ai_task_payload(ai_task), status=200 if ai_task.status in ('COMPLETED', 'FAILED') else 202)
+
+
+def ai_task_payload(ai_task):
+    return {
+        'ai_task_id': ai_task.id,
+        'status': ai_task.status,
+        'error': ai_task.error_message or None,
+        'result': ai_task.result,
+    }
+
 
 class AIVerificationView(APIView):
     permission_classes = [IsAuthenticated]
@@ -44,7 +73,9 @@ class AIVerificationView(APIView):
         content = request.data.get('content')
         if not content:
             return Response({'error': 'Content required'}, status=400)
-        result = AIService.verify(content)
+        result, error = call_ai(AIService.verify, content)
+        if error:
+            return error
         return Response(result)
 
 class AIReformulationView(APIView):
@@ -54,7 +85,9 @@ class AIReformulationView(APIView):
         style = request.data.get('style', 'academic')
         if not text:
             return Response({'error': 'Text required'}, status=400)
-        result = AIService.reformulate(text, style)
+        result, error = call_ai(AIService.reformulate, text, style)
+        if error:
+            return error
         return Response({'result': result})
 
 class AISummaryView(APIView):
@@ -63,7 +96,9 @@ class AISummaryView(APIView):
         text = request.data.get('text')
         if not text:
             return Response({'error': 'Text required'}, status=400)
-        result = AIService.summarize(text)
+        result, error = call_ai(AIService.summarize, text)
+        if error:
+            return error
         return Response({'summary': result})
 
 class AITranslationView(APIView):
@@ -73,7 +108,9 @@ class AITranslationView(APIView):
         target_lang = request.data.get('target_lang', 'en')
         if not text:
             return Response({'error': 'Text required'}, status=400)
-        result = AIService.translate(text, target_lang)
+        result, error = call_ai(AIService.translate, text, target_lang)
+        if error:
+            return error
         return Response({'translation': result})
 
 class AIGenerateDiagramView(APIView):
@@ -97,9 +134,11 @@ class AIGenerateChartView(APIView):
         return Response({'task_id': task.id})
 
 class AITaskStatusView(APIView):
+    """Suivi d'une génération IA à partir de l'enregistrement en base (pas de dépendance à Redis)."""
     permission_classes = [IsAuthenticated]
     def get(self, request, task_id):
-        result = AsyncResult(task_id)
-        if result.ready():
-            return Response({'status': 'completed', 'result': result.result})
-        return Response({'status': 'pending'})
+        from .models import AIGenerationTask
+        ai_task = AIGenerationTask.objects.filter(id=task_id, project__user=request.user).first()
+        if not ai_task:
+            return Response({'error': 'Tâche introuvable.'}, status=404)
+        return Response(ai_task_payload(ai_task))

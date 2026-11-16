@@ -16,5 +16,5 @@ urlpatterns = [
     path('translate/', AITranslationView.as_view(), name='ai_translate'),
     path('diagram/', AIGenerateDiagramView.as_view(), name='ai_diagram'),
     path('chart/', AIGenerateChartView.as_view(), name='ai_chart'),
-    path('task/<str:task_id>/', AITaskStatusView.as_view(), name='ai_task_status'),
+    path('task/<int:task_id>/', AITaskStatusView.as_view(), name='ai_task_status'),
 ]

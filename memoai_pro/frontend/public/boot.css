@@ -1,0 +1,5 @@
+/* Écran de démarrage (avant le chargement de React) */
+.boot-screen{position:fixed;inset:0;display:grid;place-items:center;background:#f6f8fb}
+.boot-mark{width:72px;height:72px;border-radius:18px;box-shadow:0 12px 30px #16a34a40;animation:boot 1.2s ease-in-out infinite}
+@keyframes boot{50%{transform:scale(.92);opacity:.75}}
+@media (prefers-color-scheme:dark){.boot-screen{background:#0f1724}}

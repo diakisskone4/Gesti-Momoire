@@ -1,0 +1,553 @@
+/* ==========================================
+   PAGE
+   ========================================== */
+
+.scope-create {
+  display: block;
+}
+
+.scope-create .head {
+  margin-bottom: 30px;
+}
+
+
+/* ==========================================
+   RETOUR
+   ========================================== */
+
+.scope-create .back-link {
+  display: inline-flex;
+  align-items: center;
+
+  color: var(--text-muted);
+
+  text-decoration: none;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  transition: 0.2s;
+}
+
+.scope-create .back-link:hover {
+  color: #0f766e;
+}
+
+
+/* ==========================================
+   EYEBROW
+   ========================================== */
+
+.scope-create .eyebrow {
+  display: block;
+
+  margin-top: 25px;
+
+  color: #0f766e;
+
+  font-size: 10px;
+
+  font-weight: 900;
+
+  letter-spacing: 2px;
+}
+
+
+/* ==========================================
+   TITRE
+   ========================================== */
+
+.scope-create .head h2 {
+  margin: 6px 0 8px;
+
+  color: var(--text-primary);
+
+  font-size: 34px;
+
+  font-weight: 800;
+
+  line-height: 1.2;
+}
+
+.scope-create .head p {
+  margin: 0;
+
+  color: var(--text-muted);
+
+  font-size: 14px;
+}
+
+
+/* ==========================================
+   FORMULAIRE
+   ========================================== */
+
+.scope-create .form {
+  width: 100%;
+
+  max-width: 950px;
+
+  margin: 0 auto;
+}
+
+
+/* ==========================================
+   SECTIONS
+   ========================================== */
+
+.scope-create .form-section {
+  background: var(--bg-card);
+
+  border: 1px solid var(--border-color);
+
+  border-radius: 18px;
+
+  padding: 28px;
+
+  margin-bottom: 18px;
+
+  box-shadow:
+    0 5px 20px rgba(15, 118, 110, 0.04);
+}
+
+
+/* ==========================================
+   TITRE DE SECTION
+   ========================================== */
+
+.scope-create .section-title {
+  display: flex;
+
+  align-items: center;
+
+  gap: 14px;
+
+  margin-bottom: 25px;
+}
+
+.scope-create .section-number {
+  width: 42px;
+  height: 42px;
+
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 12px;
+
+  background: #e5f7f4;
+
+  color: #0f766e;
+
+  font-size: 13px;
+
+  font-weight: 900;
+}
+
+.scope-create .section-title h3 {
+  margin: 0;
+
+  color: var(--text-primary);
+
+  font-size: 16px;
+
+  font-weight: 800;
+}
+
+.scope-create .section-title p {
+  margin: 4px 0 0;
+
+  color: #82908e;
+
+  font-size: 11px;
+}
+
+
+/* ==========================================
+   GRID
+   ========================================== */
+
+.scope-create .grid {
+  display: grid;
+
+  grid-template-columns: 1fr 1fr;
+
+  gap: 0 20px;
+}
+
+
+/* ==========================================
+   LABELS
+   ========================================== */
+
+.scope-create .form-section label {
+  display: block;
+
+  margin-bottom: 18px;
+
+  color: var(--text-secondary);
+
+  font-size: 11px;
+
+  font-weight: 800;
+}
+
+.scope-create .required {
+  color: #e11d48;
+
+  margin-left: 2px;
+}
+
+
+/* ==========================================
+   INPUTS
+   ========================================== */
+
+.scope-create .form-section input,
+.scope-create .form-section select,
+.scope-create .form-section textarea {
+
+  display: block;
+
+  width: 100%;
+
+  box-sizing: border-box;
+
+  margin-top: 8px;
+
+  padding: 13px 14px;
+
+  border: 1px solid var(--border-color);
+
+  border-radius: 10px;
+
+  background: var(--bg-input);
+
+  color: var(--text-primary);
+
+  font-family: inherit;
+
+  font-size: 13px;
+
+  outline: none;
+
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
+}
+
+
+/* ==========================================
+   PLACEHOLDER
+   ========================================== */
+
+.scope-create .form-section input::placeholder,
+.scope-create .form-section textarea::placeholder {
+  color: #a4b2b0;
+}
+
+
+/* ==========================================
+   FOCUS
+   ========================================== */
+
+.scope-create .form-section input:focus,
+.scope-create .form-section select:focus,
+.scope-create .form-section textarea:focus {
+
+  border-color: #0f766e;
+
+  background: var(--bg-card);
+
+  box-shadow:
+    0 0 0 3px rgba(15, 118, 110, 0.08);
+}
+
+
+/* ==========================================
+   TEXTAREA
+   ========================================== */
+
+.scope-create .form-section textarea {
+  min-height: 120px;
+
+  resize: vertical;
+
+  line-height: 1.6;
+}
+
+
+/* ==========================================
+   SMALL TEXT
+   ========================================== */
+
+.scope-create .form-section small {
+  display: block;
+
+  margin-top: 6px;
+
+  color: #9aa8a6;
+
+  font-size: 10px;
+
+  font-weight: 500;
+}
+
+
+/* ==========================================
+   ERREUR
+   ========================================== */
+
+.scope-create .error {
+
+  display: flex;
+
+  align-items: center;
+
+  gap: 10px;
+
+  margin-bottom: 18px;
+
+  padding: 13px 15px;
+
+  border: 1px solid #fecdd3;
+
+  border-radius: 10px;
+
+  background: #fff1f2;
+
+  color: #be123c;
+
+  font-size: 12px;
+
+  font-weight: 600;
+}
+
+.scope-create .error-icon {
+
+  width: 22px;
+  height: 22px;
+
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 50%;
+
+  background: #be123c;
+
+  color: white;
+
+  font-size: 12px;
+
+  font-weight: 900;
+}
+
+
+/* ==========================================
+   ACTIONS
+   ========================================== */
+
+.scope-create .actions {
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: flex-end;
+
+  gap: 15px;
+
+  padding: 5px 0 30px;
+}
+
+
+/* ==========================================
+   ANNULER
+   ========================================== */
+
+.scope-create .cancel {
+
+  padding: 12px 18px;
+
+  color: var(--text-muted);
+
+  text-decoration: none;
+
+  font-size: 12px;
+
+  font-weight: 700;
+
+  border-radius: 10px;
+
+  transition: 0.2s;
+}
+
+.scope-create .cancel:hover {
+
+  background: #eef5f4;
+
+  color: #0f766e;
+}
+
+
+/* ==========================================
+   BOUTON PRINCIPAL
+   ========================================== */
+
+.scope-create .primary {
+
+  border: 0;
+
+  border-radius: 11px;
+
+  padding: 13px 21px;
+
+  background: #0f766e;
+
+  color: #ffffff;
+
+  font-family: inherit;
+
+  font-size: 12px;
+
+  font-weight: 800;
+
+  cursor: pointer;
+
+  box-shadow:
+    0 6px 15px rgba(15, 118, 110, 0.20);
+
+  transition:
+    transform 0.2s,
+    background 0.2s,
+    box-shadow 0.2s;
+}
+
+.scope-create .primary:hover:not(:disabled) {
+
+  background: #0d665f;
+
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 8px 20px rgba(15, 118, 110, 0.25);
+}
+
+.scope-create .primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+
+/* ==========================================
+   BOUTON DÉSACTIVÉ
+   ========================================== */
+
+.scope-create .primary:disabled {
+
+  opacity: 0.65;
+
+  cursor: not-allowed;
+
+  box-shadow: none;
+}
+
+
+/* ==========================================
+   RESPONSIVE TABLETTE
+   ========================================== */
+
+@media (max-width: 750px) {
+
+  .scope-create .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scope-create .form-section {
+    padding: 22px;
+  }
+
+  .scope-create .head h2 {
+    font-size: 28px;
+  }
+}
+
+
+/* ==========================================
+   RESPONSIVE MOBILE
+   ========================================== */
+
+@media (max-width: 500px) {
+
+  .scope-create .form-section {
+    padding: 18px;
+
+    border-radius: 14px;
+  }
+
+  .scope-create .section-title {
+    align-items: flex-start;
+  }
+
+  .scope-create .section-number {
+    width: 36px;
+    height: 36px;
+
+    border-radius: 10px;
+  }
+
+  .scope-create .head h2 {
+    font-size: 25px;
+  }
+
+  .scope-create .actions {
+    flex-direction: column-reverse;
+
+    align-items: stretch;
+  }
+
+  .scope-create .cancel,
+  .scope-create .primary {
+    width: 100%;
+
+    box-sizing: border-box;
+
+    text-align: center;
+  }
+}
+/* Encadrement et jury */
+.scope-create .jury-list {
+  border: 1px solid var(--border-color, var(--border-color));
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin: 16px 0 0;
+}
+
+.scope-create .jury-list legend {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 6px;
+  color: var(--text-secondary, #39514e);
+}
+
+.scope-create .jury-list .check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-weight: 500;
+  margin: 8px 0;
+}
+
+.scope-create .jury-list .check input {
+  width: auto;
+  margin: 0;
+}
+
+.scope-create .hint {
+  font-size: 13px;
+  color: var(--text-muted, #748482);
+  margin: 14px 0 0;
+}

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>MemoAI Pro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Rédigez, structurez et faites valider votre mémoire universitaire avec l'aide de l'IA.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#092f2c">
+
+  <!-- PWA : Android, PC (Chrome / Edge) -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="MemoAI">
+
+  <!-- PWA : iPhone / iPad (Safari → Partager → Sur l'écran d'accueil) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="MemoAI">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+
+  <!-- Windows (épingler au menu Démarrer) -->
+  <meta name="msapplication-TileColor" content="#092f2c">
+  <meta name="msapplication-TileImage" content="/icons/icon-144x144.png">
+
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png">
+
+  <link rel="stylesheet" href="/boot.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+</head>
+<body>
+  <div id="root">
+    <!-- Écran de démarrage affiché avant le chargement de React -->
+    <div class="boot-screen" role="status" aria-label="Chargement de MemoAI">
+      <img class="boot-mark" src="/brand/memoai-mark.png" alt="" width="72" height="72">
+    </div>
+  </div>
+  <noscript>Activez JavaScript pour utiliser MemoAI Pro.</noscript>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

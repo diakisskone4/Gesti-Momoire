@@ -10,15 +10,35 @@ class Project(models.Model):
         ('DOCTORAT', 'Doctorat'),
     ]
     
+    # Cycle de vie du mémoire (cahier des charges §6.6)
     STATUS_CHOICES = [
         ('DRAFT', 'Brouillon'),
-        ('IN_PROGRESS', 'En cours'),
-        ('REVIEW', 'En révision'),
+        ('IN_PROGRESS', 'En cours de rédaction'),
+        ('REVIEW', 'En relecture'),
+        ('VALIDATED', 'Validé'),
+        ('ARCHIVED', 'Archivé'),
         ('COMPLETED', 'Terminé'),
     ]
     
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='projects')
     folder = models.ForeignKey('Folder', on_delete=models.SET_NULL, null=True, blank=True, related_name='projects')
+
+    # Encadrement et jury (§2, §3.4)
+    supervisor = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='supervised_projects', limit_choices_to={'role': 'SUPERVISOR'},
+    )
+    co_supervisor = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='co_supervised_projects', limit_choices_to={'role__in': ['SUPERVISOR', 'CO_SUPERVISOR']},
+    )
+    # Modèle de mémoire acheté appliqué à ce mémoire (page de garde + plan)
+    template = models.ForeignKey(
+        'modeles.MemoirTemplate', on_delete=models.SET_NULL, null=True, blank=True, related_name='projects',
+    )
+    jury = models.ManyToManyField(
+        User, blank=True, related_name='jury_projects', limit_choices_to={'role': 'JURY'},
+    )
     
     title = models.CharField(max_length=255)
     theme = models.CharField(max_length=255, blank=True, null=True)
@@ -46,6 +66,10 @@ class Project(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     archived_at = models.DateTimeField(null=True, blank=True)
+    status_before_archive = models.CharField(max_length=20, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    validated_at = models.DateTimeField(null=True, blank=True)
+    review_comment = models.TextField(blank=True)
     
     export_allowed = models.BooleanField(default=True)
     

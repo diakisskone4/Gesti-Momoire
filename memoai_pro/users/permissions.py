@@ -28,3 +28,19 @@ class IsSupervisor(permissions.BasePermission):
     
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated and request.user.role == 'SUPERVISOR'
+
+class HasRole(permissions.BasePermission):
+    """Autorise uniquement les utilisateurs dont le rôle figure dans `roles`."""
+    roles = ()
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.role in self.roles)
+
+
+class IsAdminRole(HasRole):
+    roles = ('ADMIN',)
+
+
+class IsReviewerRole(HasRole):
+    """Encadreur, co-encadreur ou membre du jury."""
+    roles = ('SUPERVISOR', 'CO_SUPERVISOR', 'JURY')

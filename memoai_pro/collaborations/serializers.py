@@ -23,6 +23,8 @@ class ValidationSerializer(serializers.ModelSerializer):
         model = Validation
         fields = ['id', 'project', 'chapter', 'validator', 'status', 'comment', 'created_at', 'updated_at']
         read_only_fields = ['validator', 'created_at', 'updated_at']
+        # validator est fixé par la vue : l'unicité (chapitre, validateur) est vérifiée dans perform_create.
+        validators = []
 
 
 class CollaboratorSerializer(serializers.ModelSerializer):

@@ -1,0 +1,269 @@
+/* ============================================================
+   MEMOAI PRO — SYSTÈME DE DESIGN
+   Palette inchangée (vert sarcelle #0f766e, menthe #5eead4, ambre #fbbf24) ;
+   jetons d'espacement, de rayon, d'ombre et de typographie partagés.
+   ============================================================ */
+
+:root {
+  /* Couleurs de marque */
+  --primary: #0f766e;
+  --primary-hover: #0d6b63;
+  --primary-strong: #115e59;
+  --primary-soft: rgba(15, 118, 110, 0.1);
+  --primary-ring: rgba(15, 118, 110, 0.18);
+  --mint: #5eead4;
+  --amber: #fbbf24;
+  --sidebar-from: #092f2c;
+  --sidebar-to: #0e4741;
+
+  /* Surfaces & texte — clair */
+  --bg-primary: #f6f8fb;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-input: #fbfdfd;
+  --bg-hover: #f0f5f4;
+
+  --text-primary: #173e3a;
+  --text-secondary: #39514e;
+  --text-muted: #748482;
+  --text-light: #9aa8a6;
+
+  --border-color: #e5eceb;
+  --border-light: #f0f5f4;
+
+  --shadow: 0 1px 2px rgba(16, 42, 40, 0.04), 0 1px 3px rgba(16, 42, 40, 0.06);
+  --shadow-hover: 0 4px 12px rgba(16, 42, 40, 0.06), 0 12px 32px rgba(16, 42, 40, 0.08);
+  --shadow-lg: 0 20px 50px rgba(16, 42, 40, 0.18);
+
+  --gradient-start: #0f766e;
+  --gradient-end: #0d9488;
+
+  --success: #d1fae5;
+  --success-text: #065f46;
+  --error: #fff1f2;
+  --error-text: #be123c;
+  --warning: #fef3c7;
+  --warning-text: #92400e;
+  --info: #dbeafe;
+  --info-text: #1e40af;
+
+  /* Typographie */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+
+  /* Rayons */
+  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+
+  /* Mise en page */
+  --sidebar-w: 264px;
+  --topbar-h: 72px;
+  --bottom-nav-h: 64px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* ============================================================
+   VARIABLES - SOMBRE
+   ============================================================ */
+
+.dark-theme {
+  --primary-soft: rgba(45, 212, 191, 0.12);
+  --primary-ring: rgba(45, 212, 191, 0.22);
+  --sidebar-from: #061a20;
+  --sidebar-to: #0a2a30;
+
+  --bg-primary: #0f1724;
+  --bg-secondary: #1a2332;
+  --bg-card: #1e2a3a;
+  --bg-input: #243040;
+  --bg-hover: #2a3a4a;
+
+  --text-primary: #e8edf2;
+  --text-secondary: #c8d0d8;
+  --text-muted: #8a9aaa;
+  --text-light: #6a7a8a;
+
+  --border-color: #2a3a4a;
+  --border-light: #1a2a3a;
+
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.5);
+
+  --success: #064e3b;
+  --success-text: #34d399;
+  --error: #4a1a1a;
+  --error-text: #f87171;
+  --warning: #4a3a0a;
+  --warning-text: #fbbf24;
+  --info: #1a2a4a;
+  --info-text: #60a5fa;
+
+  color-scheme: dark;
+}
+
+/* ============================================================
+   TRANSITION DE THÈME
+   Uniquement pendant le changement clair/sombre (classe posée par ThemeContext) :
+   une transition permanente sur * ralentissait toutes les pages.
+   ============================================================ */
+
+.theme-transition,
+.theme-transition *,
+.theme-transition *::before,
+.theme-transition *::after {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+h1, h2, h3, h4 { letter-spacing: -0.02em; line-height: 1.25; }
+img, svg, video { max-width: 100%; }
+a { color: var(--primary); }
+::selection { background: rgba(94, 234, 212, 0.4); color: inherit; }
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+
+* { scrollbar-width: thin; scrollbar-color: var(--border-color) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: var(--text-light); }
+
+/* ============================================================
+   ÉCRANS TACTILES (téléphones, tablettes)
+   ============================================================ */
+
+@media (pointer: coarse) {
+  /* Cibles tactiles de 44 px minimum (recommandation Apple / Google) */
+  .btn-primary, .btn-secondary, .btn-danger { min-height: 44px; }
+  .btn-icon, .close-btn { min-width: 40px; min-height: 40px; }
+}
+
+@media (max-width: 768px) {
+  /* iOS zoome sur les champs dont le texte fait moins de 16 px : on l'évite. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea { font-size: 16px !important; }
+}
+
+/* ============================================================
+   ADAPTATION DES COMPOSANTS (MODE SOMBRE)
+   ============================================================ */
+
+/* Cards */
+.dark-theme .project-card,
+.dark-theme .stat-card,
+.dark-theme .recent-card,
+.dark-theme .profile-card,
+.dark-theme .chapters,
+.dark-theme .workspace,
+.dark-theme .modal-content,
+.dark-theme .action-card,
+.dark-theme .chart-card {
+  background: var(--bg-card);
+  border-color: var(--border-color);
+}
+
+/* Inputs */
+.dark-theme input,
+.dark-theme select,
+.dark-theme textarea,
+.dark-theme .search-input {
+  background: var(--bg-input);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.dark-theme input:focus,
+.dark-theme select:focus,
+.dark-theme textarea:focus,
+.dark-theme .search-input:focus {
+  background: var(--bg-secondary);
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.2);
+}
+
+/* Loading spinner */
+.dark-theme .spinner {
+  border-color: var(--border-color);
+  border-top-color: #0f766e;
+}
+
+/* Empty states */
+.dark-theme .empty-state,
+.dark-theme .empty-recent {
+  background: var(--bg-input);
+  border-color: var(--border-color);
+}
+
+/* Buttons secondary */
+.dark-theme .btn-secondary {
+  background: var(--bg-input);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+.dark-theme .btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: #0f766e;
+  color: #5eead4;
+}
+
+/* Status badges */
+.dark-theme .status-draft { background: #1a2a3a; color: #8a9aaa; }
+.dark-theme .status-progress { background: #1a2a4a; color: #60a5fa; }
+.dark-theme .status-review { background: #4a3a0a; color: #fbbf24; }
+.dark-theme .status-completed { background: #064e3b; color: #34d399; }
+
+/* Stat cards */
+.dark-theme .stat-card-total .stat-icon-wrapper { background: #064e3b; }
+.dark-theme .stat-card-draft .stat-icon-wrapper { background: #4a3a0a; }
+.dark-theme .stat-card-progress .stat-icon-wrapper { background: #1a2a4a; }
+.dark-theme .stat-card-completed .stat-icon-wrapper { background: #064e3b; }
+.dark-theme .stat-card-chapters .stat-icon-wrapper { background: #3a1a4a; }
+.dark-theme .stat-card-words .stat-icon-wrapper { background: #4a1a3a; }
+
+.dark-theme .stat-card .stat-value { color: var(--text-primary); }
+.dark-theme .stat-card .stat-label { color: var(--text-muted); }

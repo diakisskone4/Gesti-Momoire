@@ -1,0 +1,91 @@
+/* Bandeaux de l'application installable : installation, mise à jour, hors ligne. */
+
+.pwa-offline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: calc(6px + var(--safe-top)) 16px 6px;
+  background: #92400e;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+  animation: fadeIn .2s ease;
+}
+
+.pwa-banner {
+  position: fixed;
+  z-index: 9000;
+  right: calc(20px + var(--safe-right));
+  bottom: calc(20px + var(--safe-bottom));
+  width: min(440px, calc(100vw - 24px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 12px 14px 14px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  animation: slideUp .35s var(--ease);
+}
+.pwa-banner .btn-primary { flex: none; }
+.pwa-banner-logo { flex: none; border-radius: 10px; }
+.pwa-banner-icon {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 10px;
+  background: var(--primary-soft); color: var(--primary);
+}
+.pwa-banner-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pwa-banner-text strong { font-size: 14px; font-weight: 700; }
+.pwa-banner-text span { font-size: 12.5px; color: var(--text-muted); line-height: 1.4; }
+
+.pwa-icon-btn {
+  flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px;
+  background: none; border: 0; color: var(--text-muted); cursor: pointer;
+}
+.pwa-icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+/* Au-dessus de la barre d'onglets mobile */
+@media (max-width: 640px) {
+  .pwa-banner { left: 12px; right: 12px; width: auto; bottom: calc(12px + var(--safe-bottom)); }
+  .has-bottom-nav .pwa-banner { bottom: calc(var(--bottom-nav-h) + 12px + var(--safe-bottom)); }
+  .pwa-banner-text span { display: none; }
+}
+
+/* Instructions iPhone / iPad */
+.pwa-sheet-overlay {
+  position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: rgba(4, 22, 20, .5); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: fadeIn .2s ease;
+}
+.pwa-sheet {
+  position: relative; width: min(420px, 100%); padding: 28px 24px 22px; text-align: center;
+  background: var(--bg-card); color: var(--text-primary); border-radius: var(--radius-xl); box-shadow: var(--shadow-lg);
+  animation: slideUp .28s var(--ease);
+}
+.pwa-sheet-close { position: absolute; top: 12px; right: 12px; }
+.pwa-sheet-logo { border-radius: 14px; box-shadow: 0 8px 20px rgba(15, 118, 110, .3); }
+.pwa-sheet h2 { margin: 14px 0 18px; font-size: 18px; }
+.pwa-steps { list-style: none; margin: 0 0 20px; padding: 0; display: grid; gap: 10px; text-align: left; }
+.pwa-steps li {
+  display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: var(--radius-md);
+  background: var(--bg-input); border: 1px solid var(--border-color); font-size: 13.5px; line-height: 1.45; color: var(--text-secondary);
+}
+.pwa-steps strong { color: var(--text-primary); }
+.pwa-step-icon {
+  flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px;
+  background: var(--primary-soft); color: var(--primary); font-weight: 800;
+}
+.dark-theme .pwa-step-icon, .dark-theme .pwa-banner-icon { color: #5eead4; }
+.pwa-sheet-ok { width: 100%; min-height: 46px; }
+
+@media (max-width: 640px) {
+  .pwa-sheet-overlay { align-items: flex-end; padding: 0; }
+  .pwa-sheet { width: 100%; border-radius: 22px 22px 0 0; padding-bottom: calc(22px + var(--safe-bottom)); animation: sheetUp .32s var(--ease); }
+}

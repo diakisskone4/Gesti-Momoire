@@ -1,0 +1,479 @@
+/* ============================================================
+   COQUILLE DE L'APPLICATION
+   Bureau  (> 1024 px) : barre latérale fixe + barre supérieure.
+   Tablette (≤ 1024 px) : barre latérale en tiroir, bouton menu.
+   Mobile  (≤ 640 px)  : tiroir + barre d'onglets en bas (style application).
+   ============================================================ */
+
+.scope-layout { display: block; min-height: 100vh; min-height: 100dvh; }
+
+.scope-layout .app-shell {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg-primary);
+}
+
+/* ---------- Barre latérale ---------- */
+.scope-layout .sidebar {
+  width: var(--sidebar-w);
+  background: linear-gradient(180deg, var(--sidebar-from), var(--sidebar-to));
+  color: #fff;
+  padding: calc(20px + var(--safe-top)) 16px calc(18px + var(--safe-bottom)) calc(16px + var(--safe-left));
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 40;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: #ffffff22 transparent;
+}
+
+.scope-layout .sidebar-head { display: flex; align-items: center; justify-content: space-between; margin: 2px 6px 22px; }
+
+.scope-layout .brand {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  color: #fff;
+  text-decoration: none;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+.scope-layout .brand strong { font-weight: 800; }
+
+.scope-layout .brand-mark {
+  flex: none;
+  display: block;
+  border-radius: 11px;
+  box-shadow: 0 6px 16px #0000004d, 0 0 0 1px #ffffff1f;
+}
+
+.scope-layout .brand small {
+  display: block;
+  color: #9bded5;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  margin-top: 1px;
+}
+
+.scope-layout .drawer-close {
+  display: none;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid #ffffff1f;
+  background: transparent;
+  color: #d3eeea;
+  cursor: pointer;
+}
+.scope-layout .drawer-close:hover { background: #ffffff14; color: #fff; }
+
+/* Carte utilisateur */
+.scope-layout .user-card {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px;
+  background: #ffffff0d;
+  border: 1px solid #ffffff14;
+  border-radius: var(--radius-md);
+}
+
+.scope-layout .user-card .avatar,
+.scope-layout .top-avatar {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #fbbf24;
+  color: #123b37;
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: 0 0 0 2px #ffffff26;
+}
+
+.scope-layout .user-info { min-width: 0; }
+.scope-layout .user-info strong,
+.scope-layout .user-info span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scope-layout .user-info strong { font-size: 13px; font-weight: 600; }
+.scope-layout .user-info span { color: #9bded5; font-size: 11.5px; margin-top: 2px; }
+
+/* Navigation */
+.scope-layout .nav-label {
+  margin: 24px 12px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: #ffffff66;
+}
+
+.scope-layout .nav { display: grid; gap: 3px; }
+
+.scope-layout .nav a {
+  position: relative;
+  color: #c5e7e2;
+  text-decoration: none;
+  padding: 11px 12px;
+  border-radius: var(--radius);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.scope-layout .nav a:hover { background: #ffffff0f; color: #fff; }
+
+.scope-layout .nav a.active {
+  background: #ffffff17;
+  color: #fff;
+  font-weight: 600;
+}
+
+.scope-layout .nav a.active::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #5eead4;
+}
+.scope-layout .nav a.active svg { color: #5eead4; }
+
+/* Bas de la barre latérale */
+.scope-layout .sidebar-bottom { margin-top: auto; padding-top: 20px; display: grid; gap: 8px; }
+
+.scope-layout .tip {
+  display: flex;
+  gap: 10px;
+  background: #05252280;
+  border: 1px solid #ffffff0d;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-bottom: 4px;
+}
+.scope-layout .tip span { color: #fbbf24; display: inline-grid; place-items: center; align-self: flex-start; }
+.scope-layout .tip strong, .scope-layout .tip small { display: block; }
+.scope-layout .tip strong { font-size: 12px; }
+.scope-layout .tip small { color: #a8d6d0; font-size: 11px; line-height: 1.5; margin-top: 3px; }
+
+.scope-layout .sidebar-btn {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: transparent;
+  border: 1px solid #ffffff1f;
+  color: #d3eeea;
+  padding: 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.scope-layout .sidebar-btn:hover { background: #ffffff12; color: #fff; }
+.scope-layout .install-btn { background: #5eead4; border-color: #5eead4; color: #073b36; font-weight: 700; }
+.scope-layout .install-btn:hover { background: #99f6e4; color: #073b36; }
+
+.scope-layout .sidebar-backdrop { display: none; }
+
+/* ---------- Zone principale ---------- */
+.scope-layout .main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Barre supérieure */
+.scope-layout .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  min-height: var(--topbar-h);
+  padding: 14px 36px;
+  padding-right: calc(36px + var(--safe-right));
+  background: color-mix(in srgb, var(--bg-secondary) 88%, transparent);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.scope-layout .menu-btn,
+.scope-layout .topbar-brand { display: none; }
+
+.scope-layout .topbar-title { flex: 1; min-width: 0; }
+
+.scope-layout .topbar .eyebrow {
+  color: var(--primary);
+  font-size: 10px;
+  letter-spacing: 1.8px;
+  font-weight: 700;
+}
+.dark-theme .scope-layout .topbar .eyebrow { color: #5eead4; }
+
+.scope-layout .topbar h1 {
+  margin: 3px 0 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scope-layout .topbar-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+
+.scope-layout .icon-btn {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.scope-layout .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.scope-layout .icon-btn[aria-expanded='true'] { background: var(--primary-soft); color: var(--primary); }
+
+.scope-layout .top-avatar {
+  text-decoration: none;
+  width: 38px;
+  height: 38px;
+  margin-left: 6px;
+  box-shadow: 0 0 0 2px var(--bg-secondary), 0 0 0 3.5px #fbbf2499;
+  transition: transform 0.15s ease;
+}
+.scope-layout .top-avatar:hover { transform: scale(1.05); }
+
+/* Notifications */
+.scope-layout .notification-wrapper { position: relative; }
+
+.scope-layout .notification-badge {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.scope-layout .notification-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 10px;
+  z-index: 1000;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: slideDown 0.2s var(--ease);
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Contenu */
+.scope-layout .layout-content {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 32px 36px 64px;
+  padding-right: calc(36px + var(--safe-right));
+  animation: pageIn 0.3s var(--ease);
+}
+
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Barre d'onglets (mobile uniquement) */
+.scope-layout .bottom-nav { display: none; }
+
+/* ============================================================
+   TABLETTE : barre latérale en tiroir
+   ============================================================ */
+@media (max-width: 1024px) {
+  .scope-layout .sidebar {
+    width: min(300px, 86vw);
+    transform: translateX(-100%);
+    transition: transform 0.28s var(--ease), box-shadow 0.28s ease;
+    visibility: hidden;
+  }
+  .scope-layout .drawer-open .sidebar {
+    transform: none;
+    visibility: visible;
+    box-shadow: 24px 0 60px #00000040;
+  }
+  .scope-layout .drawer-close { display: inline-grid; }
+  .scope-layout .nav a.active::before { left: -16px; }
+
+  .scope-layout .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    background: rgba(4, 22, 20, 0.45);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  .scope-layout .drawer-open .sidebar-backdrop { opacity: 1; pointer-events: auto; }
+
+  .scope-layout .main { margin-left: 0; }
+
+  .scope-layout .topbar {
+    padding: calc(12px + var(--safe-top)) calc(24px + var(--safe-right)) 12px calc(16px + var(--safe-left));
+    min-height: calc(64px + var(--safe-top));
+    gap: 10px;
+  }
+  .scope-layout .menu-btn {
+    display: inline-grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius);
+    background: var(--bg-card);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+  .scope-layout .menu-btn:hover { background: var(--bg-hover); }
+  .scope-layout .topbar h1 { font-size: 16px; }
+
+  .scope-layout .layout-content { padding: 26px calc(24px + var(--safe-right)) 56px calc(24px + var(--safe-left)); }
+}
+
+/* ============================================================
+   MOBILE : barre d'onglets en bas
+   ============================================================ */
+@media (max-width: 640px) {
+  .scope-layout .topbar { padding-right: calc(12px + var(--safe-right)); min-height: calc(58px + var(--safe-top)); }
+  .scope-layout .topbar-title { display: none; }
+  .scope-layout .topbar-brand {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+    text-decoration: none;
+    color: var(--text-primary);
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .scope-layout .topbar-brand .brand-mark { border-radius: 9px; box-shadow: 0 2px 6px rgba(9, 47, 44, .25); }
+  .scope-layout .menu-btn { width: 40px; height: 40px; border: 0; background: none; }
+  .scope-layout .theme-quick { display: none; }
+  .scope-layout .top-avatar { width: 34px; height: 34px; font-size: 13px; }
+
+  .scope-layout .layout-content {
+    padding: 18px calc(16px + var(--safe-right)) calc(var(--bottom-nav-h) + 28px + var(--safe-bottom)) calc(16px + var(--safe-left));
+  }
+
+  .scope-layout .notification-dropdown {
+    position: fixed;
+    top: calc(64px + var(--safe-top));
+    left: 10px;
+    right: 10px;
+  }
+  .scope-layout .notification-dropdown .notif-panel { width: 100%; max-height: min(70vh, 520px); }
+
+  .scope-layout .bottom-nav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    height: calc(var(--bottom-nav-h) + var(--safe-bottom));
+    padding: 6px calc(6px + var(--safe-right)) var(--safe-bottom) calc(6px + var(--safe-left));
+    background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+    -webkit-backdrop-filter: saturate(180%) blur(16px);
+    backdrop-filter: saturate(180%) blur(16px);
+    border-top: 1px solid var(--border-color);
+  }
+
+  .scope-layout .tab {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    text-decoration: none;
+    color: var(--text-muted);
+    font-size: 10.5px;
+    font-weight: 600;
+    border-radius: var(--radius);
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .scope-layout .tab-icon {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    height: 28px;
+    border-radius: 14px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  .scope-layout .tab-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .scope-layout .tab.active { color: var(--primary); }
+  .dark-theme .scope-layout .tab.active { color: #5eead4; }
+  .scope-layout .tab.active .tab-icon { background: var(--primary-soft); }
+  .scope-layout .tab:active .tab-icon { transform: scale(0.94); }
+
+  .scope-layout .tab-cta .tab-icon {
+    width: 44px;
+    height: 44px;
+    margin-top: -16px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #0f766e, #0d9488);
+    color: #fff;
+    box-shadow: 0 8px 20px rgba(15, 118, 110, 0.35);
+  }
+  .scope-layout .tab-cta.active .tab-icon { background: linear-gradient(135deg, #115e59, #0f766e); }
+}
+
+@media (max-width: 360px) {
+  .scope-layout .tab-label { font-size: 9.5px; }
+}

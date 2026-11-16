@@ -1,44 +1,62 @@
-from celery import shared_task
-from .models import AIGenerationTask
-from .services import AIService
-from projects.models import Project, Chapter
 import json
+import logging
+
+from celery import shared_task
+from kombu.exceptions import OperationalError
+
+from .models import AIGenerationTask
+from .services import AIError, AIService
+from projects.models import Project
+
+logger = logging.getLogger(__name__)
+
+
+def start_plan_generation(project):
+    """Crée le suivi de génération puis lance la tâche (§6.3).
+    Lève OperationalError si le broker Celery (Redis) est injoignable."""
+    ai_task = AIGenerationTask.objects.create(project=project, type='plan', status='PENDING')
+    try:
+        result = generate_plan_task.delay(ai_task.id)
+    except OperationalError:
+        ai_task.status = 'FAILED'
+        ai_task.error_message = 'File de tâches indisponible (Redis).'
+        ai_task.save(update_fields=['status', 'error_message', 'updated_at'])
+        raise
+    ai_task.celery_task_id = result.id or ''
+    ai_task.save(update_fields=['celery_task_id', 'updated_at'])
+    ai_task.refresh_from_db()
+    return ai_task
+
 
 @shared_task
-def generate_plan_task(project_id, theme):
-    task_record = None
+def generate_plan_task(ai_task_id):
+    task_record = AIGenerationTask.objects.select_related('project').get(id=ai_task_id)
+    project = task_record.project
+    task_record.status = 'PROCESSING'
+    task_record.save(update_fields=['status', 'updated_at'])
     try:
-        task_record = AIGenerationTask.objects.get(project_id=project_id, type='plan')
-        task_record.status = 'PROCESSING'
-        task_record.save()
+        from .generation import project_context, rebuild_plan, template_guide
+        plan_data = json.loads(AIService.generate_plan(
+            project.theme or project.title,
+            context=project_context(project),
+            guide=template_guide(project.template) if project.template_id else '',
+        ))
+        if not plan_data.get('chapters'):
+            raise AIError("L'IA a renvoyé un plan vide. Réessayez.", 502)
+        rebuild_plan(project, plan_data)
 
-        plan_json = AIService.generate_plan(theme)
-        plan_data = json.loads(plan_json)
-
-        project = Project.objects.get(id=project_id)
-        # Créer les chapitres à partir du plan
-        for chapter_data in plan_data.get('chapters', []):
-            Chapter.objects.create(
-                project=project,
-                title=chapter_data.get('title', 'Chapitre'),
-                order=chapter_data.get('order', 0),
-                type='chapter'
-            )
-            # pour les sous-sections, on pourrait les ajouter en tant qu'enfants
-        
-        # Stocker le plan complet en résultat
         task_record.result = plan_data
         task_record.status = 'COMPLETED'
-        task_record.save()
-
-        # Mettre à jour le statut du projet
-        project.status = 'PLAN_GENERATED'
-        project.save()
-    except Exception as e:
-        if task_record is not None:
-            task_record.status = 'FAILED'
-            task_record.error_message = str(e)
-            task_record.save()
+        task_record.save(update_fields=['result', 'status', 'updated_at'])
+    except AIError as e:
+        task_record.status = 'FAILED'
+        task_record.error_message = str(e)
+        task_record.save(update_fields=['status', 'error_message', 'updated_at'])
+    except Exception:
+        logger.exception('Échec de la génération du plan (tâche %s)', ai_task_id)
+        task_record.status = 'FAILED'
+        task_record.error_message = "La génération du plan a échoué. Vérifiez la configuration de l'IA et réessayez."
+        task_record.save(update_fields=['status', 'error_message', 'updated_at'])
 
 
 @shared_task

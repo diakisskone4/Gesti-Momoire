@@ -1,30 +1,50 @@
-from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from django.db import models
-from django.http import FileResponse
-from django.shortcuts import get_object_or_404
-from .models import Project, Folder, Chapter, Reference
-from .serializers import ProjectSerializer, FolderSerializer, ChapterSerializer, ReferenceSerializer
-from users.permissions import IsProjectOwnerOrSupervisor
-from ai.tasks import generate_plan_task
+import logging
+import re
+from html import escape
 from io import BytesIO
-import requests
 
-# Import conditionnel pour éviter les erreurs si les modules ne sont pas installés
+import requests
+from django.db import models
+from django.db.models import Q
+from django.http import FileResponse, HttpResponse
+from django.utils import timezone
+from rest_framework import permissions, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.response import Response
+
+from .access import get_owned_project, is_reviewer, readable_project_q
+from .models import Chapter, Folder, Project, Reference
+from .serializers import ChapterSerializer, FolderSerializer, ProjectSerializer, ReferenceSerializer
+
+logger = logging.getLogger(__name__)
+
 try:
-    import docx
     from docx import Document
-except ImportError:
-    docx = None
+except ImportError:  # pragma: no cover
     Document = None
 
 try:
-    from reportlab.lib.pagesizes import letter
-    from reportlab.pdfgen import canvas
-except ImportError:
-    letter = None
-    canvas = None
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+except ImportError:  # pragma: no cover
+    SimpleDocTemplate = None
+
+
+def safe_filename(title, ext):
+    name = re.sub(r'[^\w\- ]+', '', title or 'memoire', flags=re.UNICODE).strip() or 'memoire'
+    return f'{name[:80]}.{ext}'
+
+
+def format_reference(ref):
+    parts = [f'{ref.authors} ({ref.year}). {ref.title}.']
+    if ref.journal:
+        parts.append(f'{ref.journal}.')
+    if ref.doi:
+        parts.append(f'https://doi.org/{ref.doi}')
+    return ' '.join(parts)
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -32,26 +52,129 @@ class ProjectViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Project.objects.filter(user=self.request.user).order_by('-updated_at')
+        """Chaque rôle voit les mémoires qui le concernent :
+        - étudiant : les siens ;
+        - encadreur / co-encadreur : ceux qu'il encadre (+ les siens) ;
+        - jury : ceux dont il est membre du jury ;
+        - administrateur : tous.
+        Le paramètre ?scope=mine|supervised|jury restreint la liste."""
+        if getattr(self, 'swagger_fake_view', False):  # génération du schéma Swagger
+            return Project.objects.none()
+        user = self.request.user
+        qs = Project.objects.select_related('user', 'supervisor', 'co_supervisor').prefetch_related(
+            'jury', 'chapters__children',
+        )
+        if user.role != 'ADMIN':
+            qs = qs.filter(
+                Q(user=user) | Q(supervisor=user) | Q(co_supervisor=user) | Q(jury=user)
+            ).distinct()
+
+        scope = self.request.query_params.get('scope')
+        if scope == 'mine':
+            qs = qs.filter(user=user)
+            if self.request.query_params.get('archived') != '1':
+                qs = qs.exclude(status='ARCHIVED')
+        elif scope == 'supervised':
+            qs = qs.filter(Q(supervisor=user) | Q(co_supervisor=user))
+        elif scope == 'jury':
+            qs = qs.filter(jury=user)
+        return qs.order_by('-updated_at')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+    def _require_owner(self, project):
+        if project.user_id != self.request.user.id:
+            raise PermissionDenied("Seul l'auteur du mémoire peut effectuer cette action.")
+
+    def perform_update(self, serializer):
+        self._require_owner(serializer.instance)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if instance.user_id != self.request.user.id and self.request.user.role != 'ADMIN':
+            raise PermissionDenied("Seul l'auteur du mémoire peut le supprimer.")
+        instance.delete()
+
+    # ---------------------------------------------------------- cycle de vie
+
+    @action(detail=True, methods=['post'])
+    def submit_review(self, request, pk=None):
+        """Étudiant : soumet le mémoire à son encadreur (→ En relecture)."""
+        project = self.get_object()
+        self._require_owner(project)
+        if project.status not in ('DRAFT', 'IN_PROGRESS'):
+            raise ValidationError({'error': 'Ce mémoire ne peut pas être soumis dans son état actuel.'})
+        if not project.supervisor_id and not project.co_supervisor_id:
+            raise ValidationError({'error': "Ajoutez d'abord un encadreur à votre mémoire."})
+        project.status = 'REVIEW'
+        project.submitted_at = timezone.now()
+        project.save(update_fields=['status', 'submitted_at', 'updated_at'])
+        from notifications.signals import notify
+        for reviewer in (project.supervisor, project.co_supervisor):
+            if reviewer:
+                notify(reviewer, request.user, 'a soumis son mémoire pour relecture', project, project.title)
+        return Response(self.get_serializer(project).data)
+
+    @action(detail=True, methods=['post'])
+    def review(self, request, pk=None):
+        """Encadreur / co-encadreur / jury : valide ou demande des corrections.
+        Corps : {"decision": "approve" | "request_changes", "comment": "..."}"""
+        project = self.get_object()
+        user = request.user
+        if not is_reviewer(project, user):
+            raise PermissionDenied("Vous n'êtes ni encadreur ni membre du jury de ce mémoire.")
+        if project.status != 'REVIEW':
+            raise ValidationError({'error': "Ce mémoire n'est pas en relecture."})
+
+        decision = request.data.get('decision')
+        comment = str(request.data.get('comment') or '')
+        if decision == 'approve':
+            project.status = 'VALIDATED'
+            project.validated_at = timezone.now()
+        elif decision == 'request_changes':
+            if not comment.strip():
+                raise ValidationError({'comment': 'Expliquez les corrections attendues.'})
+            project.status = 'IN_PROGRESS'
+        else:
+            raise ValidationError({'decision': 'Valeur attendue : approve ou request_changes.'})
+        project.review_comment = comment
+        project.save(update_fields=['status', 'validated_at', 'review_comment', 'updated_at'])
+
+        from notifications.signals import notify
+        verb = 'a validé votre mémoire' if decision == 'approve' else 'demande des corrections sur votre mémoire'
+        notify(project.user, user, verb, project, comment or project.title)
+        return Response(self.get_serializer(project).data)
+
+    @action(detail=True, methods=['post'])
+    def archive(self, request, pk=None):
+        project = self.get_object()
+        self._require_owner(project)
+        if project.status != 'ARCHIVED':
+            project.status_before_archive = project.status
+            project.status = 'ARCHIVED'
+            project.archived_at = timezone.now()
+            project.save(update_fields=['status', 'status_before_archive', 'archived_at', 'updated_at'])
+        return Response(self.get_serializer(project).data)
+
+    @action(detail=True, methods=['post'])
+    def restore(self, request, pk=None):
+        project = self.get_object()
+        self._require_owner(project)
+        if project.status == 'ARCHIVED':
+            project.status = project.status_before_archive or 'IN_PROGRESS'
+            project.archived_at = None
+            project.save(update_fields=['status', 'archived_at', 'updated_at'])
+        return Response(self.get_serializer(project).data)
+
     @action(detail=True, methods=['post'])
     def generate_plan(self, request, pk=None):
         project = self.get_object()
-        if project.status != 'DRAFT':
-            return Response({'error': 'Plan déjà généré'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        from ai.models import AIGenerationTask
-        task = generate_plan_task.delay(project.id, project.theme)
-        ai_task = AIGenerationTask.objects.create(
-            project=project,
-            type='plan',
-            status='PENDING',
-            celery_task_id=task.id
-        )
-        return Response({'task_id': task.id, 'ai_task_id': ai_task.id})
+        self._require_owner(project)
+        from ai.views import plan_generation_response
+        return plan_generation_response(project)
+
+    # ---------------------------------------------------------- export
 
     @action(detail=True, methods=['post'])
     def request_export(self, request, pk=None):
@@ -65,230 +188,247 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def export(self, request, pk=None):
         project = self.get_object()
+        if not project.export_allowed:
+            return Response({'error': 'Export non autorisé. Veuillez payer.'}, status=status.HTTP_402_PAYMENT_REQUIRED)
         format_type = request.data.get('format', 'docx')
-        include_chapters = request.data.get('include_chapters', True)
-        include_bibliography = request.data.get('include_bibliography', True)
+        include_chapters = bool(request.data.get('include_chapters', True))
+        include_bibliography = bool(request.data.get('include_bibliography', True))
 
-        if format_type == 'docx':
-            if Document is None:
-                return Response(
-                    {'error': 'Le module python-docx n\'est pas installé. Installez-le avec: pip install python-docx'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-            return self.export_docx(project, include_chapters, include_bibliography)
-        elif format_type == 'pdf':
-            if canvas is None:
-                return Response(
-                    {'error': 'Le module reportlab n\'est pas installé. Installez-le avec: pip install reportlab'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-            return self.export_pdf(project, include_chapters, include_bibliography)
-        elif format_type == 'html':
-            return self.export_html(project, include_chapters, include_bibliography)
-        else:
-            return Response(
-                {'error': 'Format non supporté'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        exporters = {'docx': self.export_docx, 'pdf': self.export_pdf, 'html': self.export_html}
+        if format_type not in exporters:
+            return Response({'error': 'Format non supporté (docx, pdf ou html).'}, status=status.HTTP_400_BAD_REQUEST)
+        if format_type == 'docx' and Document is None:
+            return Response({'error': "Le module python-docx n'est pas installé."}, status=500)
+        if format_type == 'pdf' and SimpleDocTemplate is None:
+            return Response({'error': "Le module reportlab n'est pas installé."}, status=500)
+        return exporters[format_type](project, include_chapters, include_bibliography)
+
+    @staticmethod
+    def _outline(project):
+        """Chapitres puis leurs sections, dans l'ordre : [(niveau, chapitre), ...]."""
+        items = []
+
+        def walk(nodes, level):
+            for node in nodes:
+                items.append((level, node))
+                walk(node.children.all().order_by('order'), level + 1)
+
+        walk(project.chapters.filter(parent=None).order_by('order'), 1)
+        return items
+
+    @staticmethod
+    def _cover(project):
+        """(modèle, données) de la page de garde si le mémoire utilise un modèle acheté, sinon None."""
+        template = project.template
+        if template is None or not template.is_owned_by(project.user):
+            return None
+        from modeles.covers import cover_data
+        return template, cover_data(template, project)
+
+    def _meta_lines(self, project):
+        author = project.user.full_name
+        return [
+            f'Auteur : {author}',
+            f'Niveau : {project.get_level_display()}',
+            f"Université : {project.university or 'Non spécifiée'}",
+            f"Thème : {project.theme or 'Non spécifié'}",
+        ]
 
     def export_docx(self, project, include_chapters, include_bibliography):
         doc = Document()
-        
-        doc.add_heading(project.title, 0)
-        doc.add_paragraph(f"Theme: {project.theme or 'Non spécifié'}")
-        doc.add_paragraph(f"Niveau: {project.level}")
-        doc.add_paragraph(f"Université: {project.university or 'Non spécifiée'}")
-        doc.add_paragraph("\n" + "="*50 + "\n")
-        
+        cover = self._cover(project)
+        if cover:
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            from docx.shared import Pt
+            from modeles.covers import cover_lines
+            sizes = {'title': 20, 'header': 13, 'diploma': 12, 'person': 12, 'footer': 12, 'motto': 10, 'small': 10}
+            for text, role in cover_lines(cover[1]):
+                para = doc.add_paragraph()
+                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                if role == 'space':
+                    continue
+                run = para.add_run(text)
+                run.font.size = Pt(sizes.get(role, 11))
+                run.bold = role in ('title', 'header', 'footer')
+                run.italic = role in ('motto', 'diploma')
+            doc.add_page_break()
+        else:
+            doc.add_heading(project.title, 0)
+            for line in self._meta_lines(project):
+                doc.add_paragraph(line)
+
         if include_chapters:
-            chapters = Chapter.objects.filter(project=project).order_by('order')
-            for chapter in chapters:
-                doc.add_heading(chapter.title, level=1)
-                doc.add_paragraph(chapter.content or '')
-                doc.add_paragraph("\n")
-        
+            for level, chapter in self._outline(project):
+                doc.add_heading(chapter.title, level=min(level, 4))
+                for para in (chapter.content or '').split('\n'):
+                    if para.strip():
+                        doc.add_paragraph(para)
+
         if include_bibliography:
-            doc.add_heading("Bibliographie", level=1)
-            references = Reference.objects.filter(project=project)
-            for ref in references:
-                doc.add_paragraph(
-                    f"{ref.authors} ({ref.year}). {ref.title}. "
-                    f"{ref.journal or 'Éditeur inconnu'}."
-                )
-        
+            refs = project.references.all().order_by('authors', 'year')
+            if refs:
+                doc.add_heading('Bibliographie', level=1)
+                for ref in refs:
+                    doc.add_paragraph(format_reference(ref))
+
         buffer = BytesIO()
         doc.save(buffer)
         buffer.seek(0)
-        
         return FileResponse(
-            buffer,
-            as_attachment=True,
-            filename=f"{project.title}.docx",
-            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            buffer, as_attachment=True, filename=safe_filename(project.title, 'docx'),
+            content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         )
 
     def export_pdf(self, project, include_chapters, include_bibliography):
         buffer = BytesIO()
-        c = canvas.Canvas(buffer, pagesize=letter)
-        y = 750
-        
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(50, y, project.title)
-        y -= 30
-        
-        c.setFont("Helvetica", 12)
-        c.drawString(50, y, f"Theme: {project.theme or 'Non spécifié'}")
-        y -= 20
-        c.drawString(50, y, f"Niveau: {project.level}")
-        y -= 20
-        c.drawString(50, y, f"Université: {project.university or 'Non spécifiée'}")
-        y -= 30
-        
+        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=2.5 * cm, rightMargin=2.5 * cm,
+                                topMargin=2.5 * cm, bottomMargin=2.5 * cm, title=project.title)
+        styles = getSampleStyleSheet()
+        cover = self._cover(project)
+        if cover:
+            from reportlab.lib.enums import TA_CENTER
+            from reportlab.lib.styles import ParagraphStyle
+            from reportlab.platypus import PageBreak
+            from modeles.covers import cover_lines
+            sizes = {'title': 20, 'header': 12, 'diploma': 12, 'person': 12, 'footer': 12, 'motto': 10, 'small': 10}
+            story = []
+            for text, role in cover_lines(cover[1]):
+                if role == 'space':
+                    story.append(Spacer(1, 1.2 * cm))
+                    continue
+                font = 'Helvetica-Bold' if role in ('title', 'header', 'footer') else (
+                    'Helvetica-Oblique' if role in ('motto', 'diploma') else 'Helvetica')
+                style = ParagraphStyle(f'cover-{role}', parent=styles['Normal'], alignment=TA_CENTER, fontName=font,
+                                       fontSize=sizes.get(role, 11), leading=sizes.get(role, 11) * 1.35)
+                story.append(Paragraph(escape(text), style))
+            story.append(PageBreak())
+        else:
+            story = [Paragraph(escape(project.title), styles['Title'])]
+            story += [Paragraph(escape(line), styles['Normal']) for line in self._meta_lines(project)]
+            story.append(Spacer(1, 0.8 * cm))
+
         if include_chapters:
-            chapters = Chapter.objects.filter(project=project).order_by('order')
-            for chapter in chapters:
-                if y < 50:
-                    c.showPage()
-                    y = 750
-                c.setFont("Helvetica-Bold", 14)
-                c.drawString(50, y, chapter.title)
-                y -= 20
-                c.setFont("Helvetica", 11)
-                content = chapter.content[:500] if chapter.content else ''
-                lines = content.split('\n')
-                for line in lines:
-                    if y < 50:
-                        c.showPage()
-                        y = 750
-                    c.drawString(50, y, line[:80])
-                    y -= 15
-                y -= 20
-        
-        c.save()
+            for level, chapter in self._outline(project):
+                story.append(Paragraph(escape(chapter.title), styles[f'Heading{min(level, 3)}']))
+                for para in (chapter.content or '').split('\n'):
+                    if para.strip():
+                        story.append(Paragraph(escape(para), styles['BodyText']))
+
+        if include_bibliography:
+            refs = project.references.all().order_by('authors', 'year')
+            if refs:
+                story.append(Paragraph('Bibliographie', styles['Heading1']))
+                story += [Paragraph(escape(format_reference(r)), styles['BodyText']) for r in refs]
+
+        doc.build(story)
         buffer.seek(0)
-        
-        return FileResponse(
-            buffer,
-            as_attachment=True,
-            filename=f"{project.title}.pdf",
-            content_type='application/pdf'
-        )
+        return FileResponse(buffer, as_attachment=True, filename=safe_filename(project.title, 'pdf'),
+                            content_type='application/pdf')
 
     def export_html(self, project, include_chapters, include_bibliography):
-        html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <title>{project.title}</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
-                h1 {{ color: #0f766e; }}
-                .chapter {{ margin: 20px 0; }}
-                .chapter-title {{ color: #173e3a; }}
-                .reference {{ margin: 5px 0; }}
-            </style>
-        </head>
-        <body>
-            <h1>{project.title}</h1>
-            <p><strong>Theme:</strong> {project.theme or 'Non spécifié'}</p>
-            <p><strong>Niveau:</strong> {project.level}</p>
-            <p><strong>Université:</strong> {project.university or 'Non spécifiée'}</p>
-            <hr>
-        """
-        
+        cover_css = ''
+        cover = self._cover(project)
+        if cover:
+            from modeles.covers import render_cover_parts
+            cover_css, cover_html = render_cover_parts(*cover)
+            cover_css += '.page{margin:0 auto 40px;box-shadow:0 2px 12px #0002;page-break-after:always}'
+            body = [cover_html]
+        else:
+            body = [f'<h1>{escape(project.title)}</h1>']
+            body += [f'<p class="meta">{escape(line)}</p>' for line in self._meta_lines(project)]
+            body.append('<hr>')
         if include_chapters:
-            chapters = Chapter.objects.filter(project=project).order_by('order')
-            for chapter in chapters:
-                html += f"""
-                <div class="chapter">
-                    <h2 class="chapter-title">{chapter.title}</h2>
-                    <p>{chapter.content or ''}</p>
-                </div>
-                """
-        
+            for level, chapter in self._outline(project):
+                tag = f'h{min(level + 1, 6)}'
+                body.append(f'<{tag}>{escape(chapter.title)}</{tag}>')
+                body += [f'<p>{escape(p)}</p>' for p in (chapter.content or '').split('\n') if p.strip()]
         if include_bibliography:
-            html += "<h2>Bibliographie</h2>"
-            references = Reference.objects.filter(project=project)
-            for ref in references:
-                html += f"""
-                <div class="reference">
-                    {ref.authors} ({ref.year}). {ref.title}. {ref.journal or 'Éditeur inconnu'}.
-                </div>
-                """
-        
-        html += "</body></html>"
-        
-        return Response(
-            html,
-            content_type='text/html',
-            headers={'Content-Disposition': f'attachment; filename="{project.title}.html"'}
+            refs = project.references.all().order_by('authors', 'year')
+            if refs:
+                body.append('<h2>Bibliographie</h2>')
+                body += [f'<p class="ref">{escape(format_reference(r))}</p>' for r in refs]
+
+        html = (
+            '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">'
+            f'<title>{escape(project.title)}</title><style>'
+            'body{font-family:Georgia,serif;max-width:860px;margin:0 auto;padding:24px;line-height:1.7;color:#173e3a}'
+            'h1{color:#0f766e}.meta{margin:2px 0;color:#555}.ref{padding-left:2em;text-indent:-2em}'
+            + cover_css + '</style></head><body>' + ''.join(body) + '</body></html>'
         )
+        response = HttpResponse(html, content_type='text/html; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="{safe_filename(project.title, "html")}"'
+        return response
 
 
 class ChapterViewSet(viewsets.ModelViewSet):
+    """Lecture : l'auteur, ses encadreurs et son jury. Écriture : l'auteur seul."""
     serializer_class = ChapterSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):  # génération du schéma Swagger
+            return Chapter.objects.none()
         user = self.request.user
-        queryset = Chapter.objects.filter(project__user=user)
+        queryset = Chapter.objects.filter(readable_project_q(user)).distinct()
         project_id = self.request.query_params.get('project')
         if project_id:
             queryset = queryset.filter(project_id=project_id)
-        return queryset.order_by('order')
+        return queryset.select_related('project').order_by('order', 'id')
+
+    def _require_owner(self, chapter):
+        if chapter.project.user_id != self.request.user.id:
+            raise PermissionDenied("Seul l'auteur du mémoire peut modifier ses chapitres.")
 
     def perform_create(self, serializer):
         project_id = self.request.data.get('project')
         if not project_id:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({"project": "Le champ project est requis."})
-        try:
-            project = Project.objects.get(id=project_id, user=self.request.user)
-        except Project.DoesNotExist:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Vous n'avez pas accès à ce projet.")
+            raise ValidationError({'project': 'Le champ project est requis.'})
+        project = get_owned_project(self.request.user, project_id)
+        parent = serializer.validated_data.get('parent')
+        if parent and parent.project_id != project.id:
+            raise ValidationError({'parent': 'Le chapitre parent appartient à un autre mémoire.'})
         serializer.save(project=project)
 
     def perform_update(self, serializer):
-        project = serializer.instance.project
-        if project.user != self.request.user:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Vous n'avez pas accès à ce projet.")
-        serializer.save()
+        self._require_owner(serializer.instance)
+        if 'content' in serializer.validated_data and serializer.validated_data['content'] != serializer.instance.content:
+            serializer.save(version=serializer.instance.version + 1)
+        else:
+            serializer.save()
 
     def perform_destroy(self, instance):
-        if instance.project.user != self.request.user:
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Vous n'avez pas accès à ce projet.")
+        self._require_owner(instance)
         instance.delete()
+
+    @action(detail=True, methods=['post'])
+    def generate_content(self, request, pk=None):
+        """Rédige par IA l'introduction et les sections vides d'un chapitre (modèle acheté requis)."""
+        chapter = self.get_object()
+        self._require_owner(chapter)
+        from ai.generation import write_chapter_content
+        from ai.services import AIError
+        try:
+            written = write_chapter_content(chapter.project, chapter)
+        except AIError as e:
+            return Response({'error': str(e)}, status=e.status)
+        chapters = Chapter.objects.filter(project=chapter.project).order_by('order', 'id')
+        return Response({'written': written, 'chapters': ChapterSerializer(chapters, many=True).data})
 
     @action(detail=True, methods=['post'])
     def reorder(self, request, pk=None):
         chapter = self.get_object()
-        new_order = request.data.get('order')
-        if new_order is None:
-            return Response(
-                {'error': 'order required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        new_order = int(new_order)
-        siblings = Chapter.objects.filter(
-            project=chapter.project,
-            parent=chapter.parent
-        ).exclude(id=chapter.id)
+        self._require_owner(chapter)
+        try:
+            new_order = int(request.data.get('order'))
+        except (TypeError, ValueError):
+            return Response({'error': 'order (entier) requis'}, status=status.HTTP_400_BAD_REQUEST)
+        siblings = Chapter.objects.filter(project=chapter.project, parent=chapter.parent).exclude(id=chapter.id)
         if new_order > chapter.order:
-            siblings.filter(
-                order__gt=chapter.order,
-                order__lte=new_order
-            ).update(order=models.F('order') - 1)
+            siblings.filter(order__gt=chapter.order, order__lte=new_order).update(order=models.F('order') - 1)
         else:
-            siblings.filter(
-                order__gte=new_order,
-                order__lt=chapter.order
-            ).update(order=models.F('order') + 1)
+            siblings.filter(order__gte=new_order, order__lt=chapter.order).update(order=models.F('order') + 1)
         chapter.order = new_order
-        chapter.save()
+        chapter.save(update_fields=['order', 'updated_at'])
         return Response({'status': 'reordered'})
 
 
@@ -297,34 +437,89 @@ class FolderViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):  # génération du schéma Swagger
+            return Folder.objects.none()
         return Folder.objects.filter(user=self.request.user, parent=None)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 class ReferenceViewSet(viewsets.ModelViewSet):
+    """Bibliographie d'un mémoire : ?project_id=<id>. Lecture pour l'encadrement, écriture pour l'auteur."""
     serializer_class = ReferenceSerializer
-    permission_classes = [permissions.IsAuthenticated, IsProjectOwnerOrSupervisor]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):  # génération du schéma Swagger
+            return Reference.objects.none()
+        qs = Reference.objects.filter(readable_project_q(self.request.user)).distinct()
         project_id = self.request.query_params.get('project_id')
         if project_id:
-            return Reference.objects.filter(project_id=project_id)
-        return Reference.objects.none()
+            qs = qs.filter(project_id=project_id)
+        elif self.action == 'list':
+            return Reference.objects.none()
+        return qs.order_by('authors', 'year')
+
+    def _require_owner(self, project):
+        if project.user_id != self.request.user.id:
+            raise PermissionDenied("Seul l'auteur du mémoire peut modifier sa bibliographie.")
+
+    def perform_create(self, serializer):
+        self._require_owner(serializer.validated_data['project'])
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._require_owner(serializer.instance.project)
+        if 'project' in serializer.validated_data:
+            self._require_owner(serializer.validated_data['project'])
+        serializer.save(bibtex=None)
+
+    def perform_destroy(self, instance):
+        self._require_owner(instance.project)
+        instance.delete()
+
+    @action(detail=True, methods=['get'])
+    def bibtex(self, request, pk=None):
+        ref = self.get_object()
+        if not ref.bibtex:
+            first_author = re.sub(r'\W+', '', (ref.authors.split(',')[0].split(' ')[0] or 'ref'))
+            fields = [f'  title = {{{ref.title}}}', f'  author = {{{ref.authors}}}', f'  year = {{{ref.year}}}']
+            if ref.journal:
+                fields.append(f'  journal = {{{ref.journal}}}')
+            if ref.doi:
+                fields.append(f'  doi = {{{ref.doi}}}')
+            if ref.isbn:
+                fields.append(f'  isbn = {{{ref.isbn}}}')
+            ref.bibtex = '@article{%s%s,\n%s\n}' % (first_author.lower(), ref.year, ',\n'.join(fields))
+            ref.save(update_fields=['bibtex'])
+        return Response({'bibtex': ref.bibtex})
 
     @action(detail=False, methods=['post'])
     def import_by_doi(self, request):
-        doi = request.data.get('doi')
-        project_id = request.data.get('project_id')
-        url = f"https://api.crossref.org/works/{doi}"
-        response = requests.get(url)
-        if response.status_code == 200:
-            data = response.json()['message']
-            ref = Reference.objects.create(
-                project_id=project_id,
-                title=data.get('title', [''])[0],
-                authors=', '.join([f"{a.get('family', '')} {a.get('given', '')}" for a in data.get('author', [])]),
-                year=int(data.get('issued', {}).get('date-parts', [[2024]])[0][0]),
-                doi=doi,
-                journal=data.get('container-title', [''])[0]
-            )
-            return Response(ReferenceSerializer(ref).data)
-        return Response({'error': 'DOI not found'}, status=404)
+        doi = str(request.data.get('doi') or '').strip()
+        doi = re.sub(r'^(https?://(dx\.)?doi\.org/|doi:)', '', doi, flags=re.I)
+        if not re.match(r'^10\.\d{4,9}/\S+$', doi):
+            raise ValidationError({'error': 'DOI invalide (ex. 10.1038/nature12373).'})
+        project = get_owned_project(request.user, request.data.get('project_id'))
+        try:
+            response = requests.get(f'https://api.crossref.org/works/{doi}', timeout=10)
+        except requests.RequestException:
+            return Response({'error': 'Service Crossref injoignable. Réessayez plus tard.'}, status=502)
+        if response.status_code != 200:
+            return Response({'error': 'DOI introuvable.'}, status=404)
+
+        data = response.json().get('message', {})
+        date_parts = (data.get('issued') or {}).get('date-parts') or [[None]]
+        year = date_parts[0][0] if date_parts and date_parts[0] else None
+        ref = Reference.objects.create(
+            project=project,
+            title=((data.get('title') or ['Sans titre'])[0])[:500],
+            authors=(', '.join(
+                f"{a.get('family', '')} {a.get('given', '')}".strip() for a in data.get('author', [])
+            ) or 'Auteur inconnu')[:500],
+            year=year or timezone.now().year,
+            doi=doi[:255],
+            journal=((data.get('container-title') or [''])[0])[:255],
+        )
+        return Response(ReferenceSerializer(ref).data, status=status.HTTP_201_CREATED)

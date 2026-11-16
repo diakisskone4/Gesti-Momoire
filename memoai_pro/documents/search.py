@@ -1,10 +1,13 @@
 from django.db.models import Q
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework import permissions
-from projects.models import Project
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from projects.access import visible_projects
+
 
 class SearchView(APIView):
+    """Recherche plein texte simple, limitée aux mémoires que l'utilisateur peut voir."""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
@@ -12,16 +15,13 @@ class SearchView(APIView):
         if not query:
             return Response({'results': []})
 
-        queryset = Project.objects.filter(
+        queryset = visible_projects(request.user).filter(
             Q(title__icontains=query)
             | Q(theme__icontains=query)
             | Q(university__icontains=query)
             | Q(field_of_study__icontains=query)
-        ).values('id', 'title')[:20]
+        ).values('id', 'title', 'status')[:20]
 
-        results = [
-            {'id': item['id'], 'title': item['title'], 'score': 1.0}
-            for item in queryset
-        ]
-
-        return Response({'results': results})
+        return Response({'results': [
+            {'id': p['id'], 'title': p['title'], 'status': p['status'], 'score': 1.0} for p in queryset
+        ]})

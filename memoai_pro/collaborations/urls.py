@@ -4,7 +4,8 @@ from .views import (
     CommentViewSet, 
     ValidationViewSet, 
     CollaboratorViewSet, 
-    ShareLinkViewSet
+    ShareLinkViewSet,
+    SharedProjectView,
 )
 
 router = DefaultRouter()
@@ -14,5 +15,6 @@ router.register(r'collaborators', CollaboratorViewSet, basename='collaborator')
 router.register(r'share-links', ShareLinkViewSet, basename='share-link')
 
 urlpatterns = [
+    path('shared/<str:token>/', SharedProjectView.as_view(), name='shared-project'),
     path('', include(router.urls)),
 ]
