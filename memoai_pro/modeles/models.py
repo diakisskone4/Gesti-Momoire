@@ -27,7 +27,7 @@ class MemoirTemplate(models.Model):
     accent_color = models.CharField(max_length=7, default='#0f766e')
     # [{"title", "type", "guidance", "sections": [{"title", "guidance"}]}]
     structure = models.JSONField(default=list)
-    price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('15500'))
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('5000'))
     currency = models.CharField(max_length=3, default='XOF')
     is_active = models.BooleanField(default=True)
     order = models.PositiveIntegerField(default=0)

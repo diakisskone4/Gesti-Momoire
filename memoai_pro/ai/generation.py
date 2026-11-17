@@ -31,12 +31,19 @@ def guidance_of(content):
     return ' '.join(m.group(1).strip() for m in re.finditer(r'\[(?:Conseil du modèle|Sous-parties prévues)\s*:\s*([^\]]*)\]', content or ''))
 
 
+def _price_label():
+    """Prix d'un modèle tel qu'affiché : « 5 000 FCFA »."""
+    from decimal import Decimal
+    from django.conf import settings
+    return f"{int(Decimal(settings.MODELE_PRICE)):,} FCFA".replace(',', ' ')
+
+
 def require_paid_template(project):
     template = project.template
     if template is None or not template.is_owned_by(project.user):
         raise PaymentRequired(
             "La génération du plan et du contenu par l'IA est réservée aux mémoires qui utilisent un modèle "
-            "acheté. Choisissez un modèle (15 500 FCFA) dans « Modèles de mémoire » puis appliquez-le à ce mémoire."
+            f"acheté. Choisissez un modèle ({_price_label()}) dans « Modèles de mémoire » puis appliquez-le à ce mémoire."
         )
     return template
 

@@ -1,12 +1,12 @@
 import { lazy, Suspense } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 
 import { GuestOnly, RequireAuth } from './components/Guards';
 import { useAuth } from './context/AuthContext';
+import { STAFF_ROLES, loginPath, registerPath, roleBySlug } from './lib/roles';
 
 const LoginPage = lazy(() => import('./pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/auth/RegisterPage'));
-const StaffPortalPage = lazy(() => import('./pages/auth/StaffPortalPage'));
 const DashboardPage = lazy(() => import('./pages/student/DashboardPage'));
 const ProjectsPage = lazy(() => import('./pages/student/ProjectsPage'));
 const ProjectCreatePage = lazy(() => import('./pages/student/ProjectCreatePage'));
@@ -25,21 +25,30 @@ function Home() {
 
 const guest = (el: JSX.Element) => <GuestOnly>{el}</GuestOnly>;
 
+/** Anciennes adresses /pro/login/:role et /pro/register/:role (liens déjà envoyés) → nouvel espace du rôle. */
+function LegacyStaffRedirect({ mode }: { mode: 'login' | 'register' }) {
+  const role = roleBySlug(useParams().role);
+  if (!role || role.code === 'STUDENT') return <Navigate to="/" replace />;
+  return <Navigate to={mode === 'login' ? loginPath(role) : registerPath(role)} replace />;
+}
+
 export default function App() {
   return (
     <Suspense fallback={<div className="page-loading" role="status">Chargement…</div>}>
       <Routes>
         <Route path="/" element={<Home />} />
 
-        {/* Espace étudiant : connexion / inscription */}
-        <Route path="/login" element={guest(<LoginPage />)} />
-        <Route path="/register" element={guest(<RegisterPage />)} />
-
-        {/* Espace enseignants & administration */}
-        <Route path="/pro" element={guest(<StaffPortalPage mode="login" />)} />
-        <Route path="/pro/register" element={guest(<StaffPortalPage mode="register" />)} />
-        <Route path="/pro/login/:role" element={guest(<LoginPage />)} />
-        <Route path="/pro/register/:role" element={guest(<RegisterPage />)} />
+        {/* Chaque rôle a son propre espace de connexion / inscription, sans lien vers les autres. */}
+        <Route path="/login" element={guest(<LoginPage roleCode="STUDENT" />)} />
+        <Route path="/register" element={guest(<RegisterPage roleCode="STUDENT" />)} />
+        {STAFF_ROLES.map(r => (
+          <Route key={`${r.code}-login`} path={loginPath(r)} element={guest(<LoginPage key={r.code} roleCode={r.code} />)} />
+        ))}
+        {STAFF_ROLES.map(r => (
+          <Route key={`${r.code}-register`} path={registerPath(r)} element={guest(<RegisterPage key={r.code} roleCode={r.code} />)} />
+        ))}
+        <Route path="/pro/login/:role" element={<LegacyStaffRedirect mode="login" />} />
+        <Route path="/pro/register/:role" element={<LegacyStaffRedirect mode="register" />} />
 
         {/* Étudiant */}
         <Route path="/dashboard" element={<RequireAuth roles={['STUDENT']}><DashboardPage /></RequireAuth>} />

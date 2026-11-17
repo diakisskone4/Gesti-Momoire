@@ -1,18 +1,18 @@
 import { useState, type FormEvent } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { ApiError, describeError } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import { homeFor, loginPath, registerPath, roleByCode, roleBySlug, type RoleDef } from '../../lib/roles';
-import AuthShell, { AuthTabs, SpaceLink, STAFF_FEATURES, STUDENT_FEATURES } from './AuthShell';
+import { homeFor, loginPath, registerPath, roleByCode, type RoleCode, type RoleDef } from '../../lib/roles';
+import AuthShell, { AuthTabs, SpaceBadge } from './AuthShell';
 
-/** /login (étudiant) et /pro/login/:role (encadreur, co-encadreur, jury, administrateur). */
-export default function LoginPage() {
-  const { role: slug } = useParams();
+/** Connexion d'un espace : /login (étudiant), /encadreur/login, /co-encadreur/login, /jury/login, /admin/login.
+ *  Chaque page ne connaît que son propre rôle et ne renvoie vers aucun autre espace. */
+export default function LoginPage({ roleCode = 'STUDENT' }: { roleCode?: RoleCode }) {
   const auth = useAuth();
   const navigate = useNavigate();
 
-  const role = slug ? roleBySlug(slug) : roleByCode('STUDENT');
+  const role = roleByCode(roleCode)!;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -20,7 +20,6 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [otherRole, setOtherRole] = useState<RoleDef>();
 
-  if (!role || (slug && role.code === 'STUDENT')) return <Navigate to="/pro" replace />;
   const isStudent = role.code === 'STUDENT';
   const label = role.label.toLowerCase();
 
@@ -41,26 +40,10 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthShell
-      home={isStudent ? '/login' : '/pro'}
-      pill={isStudent ? 'Espace étudiant' : 'Enseignants & administration'}
-      title={isStudent ? 'Construisez un mémoire' : 'Accompagnez vos étudiants'}
-      highlight={isStudent ? 'plus intelligent.' : "jusqu'à la soutenance."}
-      text={isStudent
-        ? "Organisez vos idées, rédigez vos chapitres et laissez l'IA vous aider, de la première idée jusqu'à la version finale."
-        : "Suivez l'avancement des mémoires, relisez les chapitres et validez le travail de vos étudiants."}
-      features={isStudent ? STUDENT_FEATURES : STAFF_FEATURES}
-      quote={isStudent ? "Votre assistant académique, de la première idée jusqu'à la version finale." : ''}
-    >
+    <AuthShell role={role.code} home={loginPath(role)}>
       <AuthTabs loginUrl={loginPath(role)} registerUrl={registerPath(role)} active="login" />
 
-      {!isStudent && (
-        <div className="role-chip">
-          <span className="icon" aria-hidden="true">{role.icon}</span>
-          <span><strong>{role.label}</strong><small>Espace enseignants & administration</small></span>
-          <Link to="/pro">Changer de profil</Link>
-        </div>
-      )}
+      {!isStudent && <SpaceBadge icon={role.icon} label={`Espace ${label}`} />}
 
       <span className="eyebrow">{isStudent ? 'Bon retour' : `Connexion ${label}`}</span>
       <h2>Connectez-vous</h2>
@@ -97,10 +80,6 @@ export default function LoginPage() {
         </button>
       </form>
 
-      <div className="divider">{isStudent ? "Vous n'êtes pas étudiant ?" : 'Vous êtes étudiant ?'}</div>
-      {isStudent
-        ? <SpaceLink student={false} to="/pro" subtitle="Encadreur, co-encadreur, jury ou administrateur" />
-        : <SpaceLink student to="/login" subtitle="Rédigez et suivez votre mémoire" />}
     </AuthShell>
   );
 }

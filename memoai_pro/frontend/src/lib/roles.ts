@@ -4,7 +4,7 @@ export type RoleCode = 'STUDENT' | 'SUPERVISOR' | 'CO_SUPERVISOR' | 'JURY' | 'AD
 
 export interface RoleDef {
   code: RoleCode;
-  /** Segment d'URL : /pro/login/encadreur... */
+  /** Segment d'URL de l'espace : /encadreur/login, /jury/register... */
   slug: string;
   label: string;
   icon: string;
@@ -36,15 +36,19 @@ export const ROLES: RoleDef[] = [
   },
 ];
 
-/** Rôles de l'espace « Enseignants & administration » (/pro). */
+/** Rôles qui ont chacun leur propre espace de connexion (hors étudiant). */
 export const STAFF_ROLES = ROLES.filter(r => r.code !== 'STUDENT');
 export const REVIEWER_ROLES: RoleCode[] = ['SUPERVISOR', 'CO_SUPERVISOR', 'JURY'];
 
-export const loginPath = (role: RoleDef) => (role.code === 'STUDENT' ? '/login' : `/pro/login/${role.slug}`);
-export const registerPath = (role: RoleDef) => (role.code === 'STUDENT' ? '/register' : `/pro/register/${role.slug}`);
+/** Chaque rôle a son propre espace, sans lien vers les autres :
+ *  étudiant /login, encadreur /encadreur/login, co-encadreur /co-encadreur/login, jury /jury/login, admin /admin/login. */
+export const loginPath = (role: RoleDef) => (role.code === 'STUDENT' ? '/login' : `/${role.slug}/login`);
+export const registerPath = (role: RoleDef) => (role.code === 'STUDENT' ? '/register' : `/${role.slug}/register`);
 export const roleBySlug = (slug?: string | null) => ROLES.find(r => r.slug === slug);
 export const roleByCode = (code?: string | null) => ROLES.find(r => r.code === code);
 export const homeFor = (code?: string | null) => roleByCode(code)?.home ?? '/login';
+/** Page de connexion de l'espace d'un rôle (étudiant par défaut). */
+export const loginPathFor = (code?: string | null) => loginPath(roleByCode(code) ?? ROLES[0]);
 
 export const PROJECT_STATUS_LABELS: Record<string, string> = {
   DRAFT: 'Brouillon',

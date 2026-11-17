@@ -13,7 +13,7 @@ configure({ asyncUtilTimeout: 8000 });
 const TEMPLATE = {
   slug: 'licence-classique', name: 'Mémoire de Licence — Classique', tagline: 'Format universitaire', description: '',
   level: 'LICENCE', level_label: 'Licence', domain: 'Toutes disciplines', cover_style: 'classique',
-  cover_label: 'Classique universitaire', accent_color: '#0f766e', price: '15500.00', currency: 'XOF', owned: false,
+  cover_label: 'Classique universitaire', accent_color: '#0f766e', price: '5000.00', currency: 'XOF', owned: false,
   outline: [{ title: 'Introduction générale', type: 'chapter', sections: ['Problématique'] }], structure: null,
 };
 
@@ -22,7 +22,7 @@ const json = (body: unknown, status = 200) =>
 
 describe('formatPrice', () => {
   it('affiche les francs CFA', () => {
-    expect(formatPrice('15500.00', 'XOF')).toMatch(/^15\s?500 FCFA$/u);
+    expect(formatPrice('5000.00', 'XOF')).toMatch(/^5\s?000 FCFA$/u);
   });
 });
 
@@ -54,7 +54,7 @@ describe('TemplatesPage', () => {
     );
 
     expect(await screen.findByText(TEMPLATE.name)).toBeInTheDocument();
-    expect(screen.getAllByText(/15\s?500 FCFA/u).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/(^|\D)5\s?000 FCFA/u).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Acheter' }));
     await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('https://pay.saspay.me/c/xyz'));
     vi.unstubAllGlobals();

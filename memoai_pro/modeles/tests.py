@@ -41,11 +41,11 @@ class TemplatePurchaseTests(APITestCase):
             res = self.client.post(f'/modeles/{self.template.slug}/purchase/')
         return res, req
 
-    def test_catalog_has_six_templates_at_15500_xof(self):
+    def test_catalog_has_fourteen_templates_at_5000_xof(self):
         res = self.client.get('/modeles/')
         self.assertEqual(res.status_code, 200)
         self.assertEqual(len(res.data), 14)
-        self.assertEqual({(t['price'], t['currency']) for t in res.data}, {('15500.00', 'XOF')})
+        self.assertEqual({(t['price'], t['currency']) for t in res.data}, {('5000.00', 'XOF')})
         self.assertEqual(len({t['cover_style'] for t in res.data}), 6)
         # Plan complet (conseils) réservé aux acheteurs ; titres visibles par tous.
         self.assertIsNone(res.data[0]['structure'])
@@ -64,7 +64,7 @@ class TemplatePurchaseTests(APITestCase):
         payload = req.call_args.kwargs['json']
         self.assertEqual((method, url), ('POST', 'https://sandbox.test/api/v1/checkout-sessions/'))
         self.assertEqual(req.call_args.kwargs['headers']['Authorization'], 'Bearer sk_test_x')
-        self.assertEqual(payload['amount'], '15500.00')
+        self.assertEqual(payload['amount'], '5000.00')
         self.assertEqual(payload['currency'], 'XOF')
         self.assertEqual(payload['customer_email'], 'etu@test.com')
         purchase = TemplatePurchase.objects.get()
@@ -97,12 +97,12 @@ class TemplatePurchaseTests(APITestCase):
 
         paid_session = {'status': 'PAID', 'transaction_id': 'tx-1', 'transaction_status': 'SUCCESS',
                         'transaction_reference': 'REF-1'}
-        payment = {'status': 'SUCCESS', 'requested_amount': '15500.00', 'currency': 'XOF',
-                   'debited_amount': '16120.00', 'reference': 'REF-1'}
+        payment = {'status': 'SUCCESS', 'requested_amount': '5000.00', 'currency': 'XOF',
+                   'debited_amount': '5200.00', 'reference': 'REF-1'}
         res = self._verify(paid_session, payment)
         self.assertEqual(res.data['status'], 'PAID')
         self.assertTrue(self.template.is_owned_by(self.user))
-        self.assertEqual(TemplatePurchase.objects.get().amount_charged, Decimal('16120.00'))
+        self.assertEqual(TemplatePurchase.objects.get().amount_charged, Decimal('5200.00'))
 
     def test_underpaid_transaction_is_not_accepted(self):
         self.purchase()
@@ -127,7 +127,7 @@ class TemplatePurchaseTests(APITestCase):
         res = self.client.post(f'/modeles/{self.template.slug}/apply/', {'project_id': project.id})
         self.assertEqual(res.status_code, 402)
 
-        TemplatePurchase.objects.create(user=self.user, template=self.template, amount=15500, status='PAID')
+        TemplatePurchase.objects.create(user=self.user, template=self.template, amount=5000, status='PAID')
         res = self.client.post(f'/modeles/{self.template.slug}/apply/', {'project_id': project.id})
         self.assertEqual(res.status_code, 200)
         project.refresh_from_db()
@@ -143,7 +143,7 @@ class TemplatePurchaseTests(APITestCase):
         self.assertIsNone(project.template)
 
     def test_export_includes_cover_of_purchased_template(self):
-        TemplatePurchase.objects.create(user=self.user, template=self.template, amount=15500, status='PAID')
+        TemplatePurchase.objects.create(user=self.user, template=self.template, amount=5000, status='PAID')
         project = Project.objects.create(user=self.user, title='Mémoire avec garde', university='USTTB',
                                          template=self.template)
         res = self.client.post(f'/projects/projects/{project.id}/export/', {'format': 'html'}, format='json')
@@ -171,7 +171,7 @@ class TemplatePurchaseTests(APITestCase):
         self.purchase()
         responses = [
             fake_response(200, {'status': 'PAID', 'transaction_id': 'tx-9', 'transaction_status': 'SUCCESS'}),
-            fake_response(200, {'status': 'SUCCESS', 'requested_amount': '15500.00', 'currency': 'XOF'}),
+            fake_response(200, {'status': 'SUCCESS', 'requested_amount': '5000.00', 'currency': 'XOF'}),
         ]
         with mock.patch('modeles.saspay.requests.request', side_effect=responses):
             res = self._webhook({'event': 'transaction.success', 'data': {'id': 'tx-9', 'status': 'SUCCESS'}})

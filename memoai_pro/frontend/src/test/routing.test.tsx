@@ -38,19 +38,41 @@ describe('routes', () => {
     expect(screen.getByText('Bon retour')).toBeInTheDocument();
   });
 
-  it('affiche la connexion du rôle choisi dans l’espace pro', async () => {
-    renderAt('/pro/login/encadreur');
+  it('donne à chaque rôle sa propre page de connexion', async () => {
+    renderAt('/encadreur/login');
     expect(await screen.findByText('Connexion encadreur')).toBeInTheDocument();
   });
 
-  it('redirige un rôle inconnu vers le portail pro', async () => {
-    renderAt('/pro/login/pirate');
-    expect(await screen.findByText('Quel est votre profil ?')).toBeInTheDocument();
+  it.each([
+    ['/login', '/register'],
+    ['/register', '/login'],
+    ['/encadreur/login', '/encadreur/register'],
+    ['/co-encadreur/register', '/co-encadreur/login'],
+    ['/jury/login', '/jury/register'],
+    ['/admin/register', '/admin/login'],
+  ])("la page %s ne montre aucun lien vers l'espace d'un autre rôle", async (path, sibling) => {
+    renderAt(path);
+    await screen.findByRole('navigation', { name: 'Connexion ou inscription' });
+    const own = new Set([path, sibling]);
+    const links = screen.getAllByRole('link').map(a => a.getAttribute('href'));
+    expect(links.filter(href => !own.has(href ?? ''))).toEqual([]);
+    expect(screen.queryByText(/enseignants|Changer de profil|Vous n'êtes pas étudiant|Vous êtes étudiant/i)).toBeNull();
   });
 
-  it('protège les pages privées', async () => {
-    renderAt('/admin');
+  it('redirige les anciennes adresses /pro vers le nouvel espace', async () => {
+    renderAt('/pro/login/jury');
+    expect(await screen.findByText('Connexion jury')).toBeInTheDocument();
+  });
+
+  it('ne révèle aucun espace pour un rôle inconnu', async () => {
+    renderAt('/pro/login/pirate');
     expect(await screen.findByRole('heading', { name: 'Connectez-vous' })).toBeInTheDocument();
+    expect(screen.getByText('Bon retour')).toBeInTheDocument();
+  });
+
+  it("protège les pages privées en renvoyant vers la connexion de l'espace concerné", async () => {
+    renderAt('/admin');
+    expect(await screen.findByText('Connexion administrateur')).toBeInTheDocument();
   });
 
   it("renvoie un utilisateur connecté vers l'espace de son rôle", async () => {

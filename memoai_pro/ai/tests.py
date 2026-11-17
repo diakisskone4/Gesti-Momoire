@@ -95,7 +95,7 @@ class PlanGenerationTests(APITestCase):
         self.user = User.objects.create_user('etu@test.com', 'Motdepasse-Solide-2026', first_name='A', last_name='B')
         from modeles.models import MemoirTemplate, TemplatePurchase
         template = MemoirTemplate.objects.get(slug='licence-classique')
-        TemplatePurchase.objects.create(user=self.user, template=template, amount=15500, status='PAID')
+        TemplatePurchase.objects.create(user=self.user, template=template, amount=5000, status='PAID')
         self.project = Project.objects.create(user=self.user, title='Mobile money', theme='Mobile money au Mali',
                                               template=template)
         self.client.force_authenticate(self.user)
@@ -278,7 +278,7 @@ class GenerationAccessTests(APITestCase):
 
     def buy_and_apply(self):
         from modeles.models import TemplatePurchase
-        TemplatePurchase.objects.create(user=self.user, template=self.template, amount=15500, status='PAID')
+        TemplatePurchase.objects.create(user=self.user, template=self.template, amount=5000, status='PAID')
         self.client.post(f'/modeles/{self.template.slug}/apply/', {'project_id': self.project.id})
 
     def test_plan_requires_paid_template(self):

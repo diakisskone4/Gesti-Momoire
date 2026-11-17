@@ -43,7 +43,7 @@ L'URL du backend se règle avec `VITE_API_URL` (voir `.env.example`, défaut `ht
 ## Modèles de mémoire payants (SasPay)
 
 Six modèles (Licence, Master sciences & techniques, gestion, sciences sociales, droit, thèse de doctorat),
-chacun avec sa page de garde (6 styles) et un plan commenté. Prix : 15 500 FCFA par modèle (`MODELE_PRICE`,
+chacun avec sa page de garde (6 styles) et un plan commenté. Prix : 5 000 FCFA par modèle (`MODELE_PRICE`,
 modifiable ensuite dans l'admin Django).
 
 - Catalogue : `/modeles` (frontend) — API `/modeles/`.

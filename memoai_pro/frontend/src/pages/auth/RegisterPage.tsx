@@ -1,29 +1,28 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react';
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import { describeError } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import type { RegisterPayload } from '../../lib/models';
-import { ACADEMIC_TITLES, homeFor, loginPath, registerPath, roleByCode, roleBySlug } from '../../lib/roles';
-import AuthShell, { AuthTabs, SpaceLink, STAFF_FEATURES, STUDENT_FEATURES } from './AuthShell';
+import { ACADEMIC_TITLES, homeFor, loginPath, registerPath, roleByCode, type RoleCode } from '../../lib/roles';
+import AuthShell, { AuthTabs, SpaceBadge } from './AuthShell';
 
-/** /register (étudiant) et /pro/register/:role. */
-export default function RegisterPage() {
-  const { role: slug } = useParams();
+/** Inscription d'un espace : /register (étudiant), /encadreur/register, /co-encadreur/register, /jury/register,
+ *  /admin/register. Le rôle est fixé par l'adresse ; aucun lien vers les autres espaces. */
+export default function RegisterPage({ roleCode = 'STUDENT' }: { roleCode?: RoleCode }) {
   const auth = useAuth();
   const navigate = useNavigate();
-  const role = slug ? roleBySlug(slug) : roleByCode('STUDENT');
+  const role = roleByCode(roleCode)!;
 
   const [f, setF] = useState<RegisterPayload>(() => ({
     email: '', first_name: '', last_name: '', phone: '', password: '', password2: '',
-    role: role?.code ?? 'STUDENT', language: 'fr', university: '', faculty: '', department: '', student_number: '',
-    level: role?.code === 'STUDENT' ? 'MASTER' : '', academic_title: '', speciality: '', admin_code: '',
+    role: role.code, language: 'fr', university: '', faculty: '', department: '', student_number: '',
+    level: role.code === 'STUDENT' ? 'MASTER' : '', academic_title: '', speciality: '', admin_code: '',
   }));
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  if (!role || (slug && role.code === 'STUDENT')) return <Navigate to="/pro/register" replace />;
   const isStudent = role.code === 'STUDENT';
   const isReviewer = ['SUPERVISOR', 'CO_SUPERVISOR', 'JURY'].includes(role.code);
   const isAdmin = role.code === 'ADMIN';
@@ -54,24 +53,16 @@ export default function RegisterPage() {
 
   return (
     <AuthShell
+      role={role.code}
+      home={loginPath(role)}
       wide
-      home={isStudent ? '/login' : '/pro'}
-      pill={isStudent ? 'Inscription étudiant' : `Inscription ${role.label}`}
-      title={isStudent ? 'Donnez vie à votre' : 'Rejoignez'}
-      highlight={isStudent ? 'projet académique.' : 'MemoAI Pro.'}
-      text={role.description}
-      features={isStudent ? STUDENT_FEATURES : STAFF_FEATURES}
-      quote={isStudent ? "Rédaction et sauvegarde cloud gratuites : vous ne payez que l'export final." : ''}
+      title={isStudent ? 'Donnez vie à votre' : undefined}
+      highlight={isStudent ? 'projet académique.' : undefined}
+      quote={isStudent ? "Rédaction et sauvegarde cloud gratuites : vous ne payez que l'export final." : undefined}
     >
       <AuthTabs loginUrl={loginPath(role)} registerUrl={registerPath(role)} active="register" />
 
-      {!isStudent && (
-        <div className="role-chip">
-          <span className="icon" aria-hidden="true">{role.icon}</span>
-          <span><strong>{role.label}</strong><small>Espace enseignants & administration</small></span>
-          <Link to="/pro/register">Changer de profil</Link>
-        </div>
-      )}
+      {!isStudent && <SpaceBadge icon={role.icon} label={`Espace ${role.label.toLowerCase()}`} />}
 
       <span className="eyebrow">Nouveau compte</span>
       <h2>{isStudent ? 'Créez votre compte étudiant' : `Créez votre compte ${role.label.toLowerCase()}`}</h2>
@@ -182,10 +173,6 @@ export default function RegisterPage() {
         <p className="legal">En créant un compte, vous acceptez les conditions d'utilisation de MemoAI Pro.</p>
       </form>
 
-      <div className="divider">{isStudent ? "Vous n'êtes pas étudiant ?" : 'Vous êtes étudiant ?'}</div>
-      {isStudent
-        ? <SpaceLink student={false} to="/pro/register" subtitle="Encadreur, co-encadreur, jury ou administrateur" />
-        : <SpaceLink student to="/register" subtitle="Créez votre compte étudiant gratuitement" />}
     </AuthShell>
   );
 }

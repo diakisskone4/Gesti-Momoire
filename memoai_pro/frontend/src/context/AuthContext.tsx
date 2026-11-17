@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { onSessionExpired, tokens } from '../api/client';
 import { authApi } from '../api/services';
 import type { AuthResponse, RegisterPayload, User } from '../lib/models';
-import { homeFor, type RoleCode } from '../lib/roles';
+import { homeFor, loginPathFor, type RoleCode } from '../lib/roles';
 
 const USER_KEY = 'memoai_user';
 
@@ -47,15 +47,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserState(u);
   }, []);
 
-  const endSession = useCallback((wasStudent: boolean) => {
+  // Après déconnexion, chacun revient à la page de connexion de SON espace.
+  const endSession = useCallback((role?: string | null) => {
     tokens.clear();
     setUser(null);
-    navigate(wasStudent ? '/login' : '/pro', { replace: true });
+    navigate(loginPathFor(role), { replace: true });
   }, [navigate, setUser]);
 
   // Jeton de rafraîchissement expiré : retour à la page de connexion.
   useEffect(() => {
-    onSessionExpired(() => endSession((readUser()?.role ?? 'STUDENT') === 'STUDENT'));
+    onSessionExpired(() => endSession(readUser()?.role));
   }, [endSession]);
 
   // Synchronise la session entre onglets.
@@ -83,7 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout: () => {
       const refresh = tokens.refresh();
       if (refresh) authApi.logout(refresh).catch(() => undefined);
-      endSession((user?.role ?? 'STUDENT') === 'STUDENT');
+      endSession(user?.role);
     },
     setUser,
     refreshProfile: () => authApi.profile().then(u => { setUser(u); return u; }),

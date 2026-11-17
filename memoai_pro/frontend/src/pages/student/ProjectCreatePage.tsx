@@ -240,7 +240,7 @@ export default function ProjectCreatePage() {
 
             {!supervisors.length && !coSupervisors.length && (
               <p className="hint">
-                Aucun encadreur n'est encore inscrit. Invitez le vôtre à créer un compte depuis <strong>/pro/register/encadreur</strong>.
+                Aucun encadreur n'est encore inscrit. Demandez au vôtre de créer son compte encadreur sur MemoAI Pro.
               </p>
             )}
           </section>

@@ -181,7 +181,7 @@ SASPAY_SECRET_KEY = os.environ.get('SASPAY_SECRET_KEY', '')
 SASPAY_API_URL = os.environ.get('SASPAY_API_URL', 'https://api.saspay.me/api/v1')
 SASPAY_WEBHOOK_SECRET = os.environ.get('SASPAY_WEBHOOK_SECRET', '')
 SASPAY_DEFAULT_COUNTRY = os.environ.get('SASPAY_DEFAULT_COUNTRY', 'ML')  # pays présélectionné sur la page de paiement
-MODELE_PRICE = os.environ.get('MODELE_PRICE', '15500')  # prix d'un modèle (XOF) à sa création
+MODELE_PRICE = os.environ.get('MODELE_PRICE', '5000')  # prix d'un modèle (XOF) à sa création
 
 # IA : fournisseur au choix — "openrouter" (API compatible OpenAI) ou "anthropic" (API Claude)
 AI_PROVIDER = os.environ.get('AI_PROVIDER', 'openrouter')

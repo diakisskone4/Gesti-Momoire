@@ -25,7 +25,7 @@ const PURCHASE_STATUS: Record<string, string> = {
   PENDING: 'En attente de paiement', PAID: 'Payé', FAILED: 'Échoué', CANCELLED: 'Annulé / expiré',
 };
 
-/** Catalogue des modèles de mémoire payants (15 500 FCFA, paiement SasPay). */
+/** Catalogue des modèles de mémoire payants (5 000 FCFA, paiement SasPay). */
 export default function TemplatesPage() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -127,7 +127,7 @@ export default function TemplatesPage() {
               <span className="eyebrow">Modèles de mémoire</span>
               <h2>Des modèles prêts à rédiger</h2>
               <p>Page de garde aux normes universitaires et plan commenté section par section. Achat unique de
-                {templates?.[0] ? ` ${formatPrice(templates[0].price, templates[0].currency)}` : ' 15 500 FCFA'} par
+                {templates?.[0] ? ` ${formatPrice(templates[0].price, templates[0].currency)}` : ' 5 000 FCFA'} par
                 modèle, utilisable sur tous vos mémoires.</p>
             </div>
             <button className="btn" onClick={load}>↻ Actualiser</button>
