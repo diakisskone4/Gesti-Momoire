@@ -26,9 +26,13 @@ def env_list(name, default=''):
     return [v.strip() for v in os.environ.get(name, default).split(',') if v.strip()]
 
 
-# Vercel : VERCEL n'est présent que si les variables système sont exposées ; les fonctions Vercel
-# tournant sur AWS Lambda, AWS_LAMBDA_FUNCTION_NAME permet de le détecter dans tous les cas.
-ON_VERCEL = bool(os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
+# Vercel : VERCEL n'est présent que si les variables système sont exposées. Les fonctions Vercel
+# s'exécutent toujours depuis /var/task : ce repère fonctionne dans tous les cas.
+ON_VERCEL = bool(
+    os.environ.get('VERCEL')
+    or os.environ.get('AWS_LAMBDA_FUNCTION_NAME')
+    or BASE_DIR.as_posix().startswith('/var/task')
+)
 
 # Sur Vercel, DEBUG est désactivé par défaut : une variable oubliée ne doit jamais
 # afficher la page d'erreur détaillée de Django au public.
@@ -55,6 +59,16 @@ for _var in ('VERCEL_URL', 'VERCEL_BRANCH_URL', 'VERCEL_PROJECT_PRODUCTION_URL')
 # que les requêtes adressées à ses propres domaines, un en-tête Host étranger ne peut donc pas l'atteindre.
 if ON_VERCEL:
     ALLOWED_HOSTS.append('.vercel.app')
+
+if ON_VERCEL:
+    # Diagnostic visible dans les logs Vercel à chaque démarrage (aucune valeur secrète affichée).
+    print(
+        f"[MemoAI] démarrage Vercel : DEBUG={DEBUG} ALLOWED_HOSTS={ALLOWED_HOSTS} "
+        f"SECRET_KEY={'oui' if os.environ.get('SECRET_KEY') else 'NON'} "
+        f"DATABASE_URL={'oui' if os.environ.get('DATABASE_URL') else 'NON'} "
+        f"VERCEL={'oui' if os.environ.get('VERCEL') else 'non'} BASE_DIR={BASE_DIR}",
+        file=sys.stderr, flush=True,
+    )
 
 
 # ---------------------------------------------------------------- applications
