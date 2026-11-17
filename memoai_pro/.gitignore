@@ -8,3 +8,5 @@ media/
 .DS_Store
 
 /out-tsc/
+.vercel
+.env*
