@@ -26,9 +26,13 @@ def env_list(name, default=''):
     return [v.strip() for v in os.environ.get(name, default).split(',') if v.strip()]
 
 
-# Sur Vercel (variable VERCEL fournie automatiquement), DEBUG est désactivé par défaut :
-# une variable oubliée ne doit jamais afficher la page d'erreur détaillée de Django au public.
-DEBUG = env_bool('DEBUG', not os.environ.get('VERCEL'))
+# Vercel : VERCEL n'est présent que si les variables système sont exposées ; les fonctions Vercel
+# tournant sur AWS Lambda, AWS_LAMBDA_FUNCTION_NAME permet de le détecter dans tous les cas.
+ON_VERCEL = bool(os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
+
+# Sur Vercel, DEBUG est désactivé par défaut : une variable oubliée ne doit jamais
+# afficher la page d'erreur détaillée de Django au public.
+DEBUG = env_bool('DEBUG', not ON_VERCEL)
 
 SECRET_KEY = os.environ.get('SECRET_KEY', '')
 if not SECRET_KEY:
@@ -36,12 +40,21 @@ if not SECRET_KEY:
         raise ImproperlyConfigured('SECRET_KEY doit être défini dans .env en production.')
     SECRET_KEY = 'django-insecure-dev-only-change-me'
 
-ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')
+def clean_host(value):
+    """« https://exemple.vercel.app/ » → « exemple.vercel.app » (erreur de saisie fréquente)."""
+    return value.split('://', 1)[-1].split('/', 1)[0].strip().lower()
 
-# Vercel : les adresses du déploiement sont fournies automatiquement.
+
+ALLOWED_HOSTS = [clean_host(h) for h in env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')]
+
+# Vercel : adresses du déploiement (si les variables système sont exposées)...
 for _var in ('VERCEL_URL', 'VERCEL_BRANCH_URL', 'VERCEL_PROJECT_PRODUCTION_URL'):
     if os.environ.get(_var):
-        ALLOWED_HOSTS.append(os.environ[_var])
+        ALLOWED_HOSTS.append(clean_host(os.environ[_var]))
+# ... et, dans tous les cas, les sous-domaines vercel.app : Vercel n'achemine vers ce projet
+# que les requêtes adressées à ses propres domaines, un en-tête Host étranger ne peut donc pas l'atteindre.
+if ON_VERCEL:
+    ALLOWED_HOSTS.append('.vercel.app')
 
 
 # ---------------------------------------------------------------- applications
@@ -145,7 +158,8 @@ CORS_ALLOWED_ORIGIN_REGEXES = env_list('CORS_ALLOWED_ORIGIN_REGEXES')
 
 # Formulaires de l'admin Django en HTTPS (Vercel) : origines de confiance pour la protection CSRF.
 CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS') + [
-    f'https://{h}' for h in ALLOWED_HOSTS if h not in ('localhost', '127.0.0.1') and not h.startswith('.')
+    f'https://{h}' if not h.startswith('.') else f'https://*{h}'
+    for h in ALLOWED_HOSTS if h not in ('localhost', '127.0.0.1', '*')
 ]
 
 
