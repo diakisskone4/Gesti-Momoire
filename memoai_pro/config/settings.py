@@ -9,6 +9,7 @@ import os
 import sys
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import parse_qsl, unquote, urlparse
 
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
@@ -25,7 +26,9 @@ def env_list(name, default=''):
     return [v.strip() for v in os.environ.get(name, default).split(',') if v.strip()]
 
 
-DEBUG = env_bool('DEBUG', True)
+# Sur Vercel (variable VERCEL fournie automatiquement), DEBUG est désactivé par défaut :
+# une variable oubliée ne doit jamais afficher la page d'erreur détaillée de Django au public.
+DEBUG = env_bool('DEBUG', not os.environ.get('VERCEL'))
 
 SECRET_KEY = os.environ.get('SECRET_KEY', '')
 if not SECRET_KEY:
@@ -34,6 +37,11 @@ if not SECRET_KEY:
     SECRET_KEY = 'django-insecure-dev-only-change-me'
 
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1')
+
+# Vercel : les adresses du déploiement sont fournies automatiquement.
+for _var in ('VERCEL_URL', 'VERCEL_BRANCH_URL', 'VERCEL_PROJECT_PRODUCTION_URL'):
+    if os.environ.get(_var):
+        ALLOWED_HOSTS.append(os.environ[_var])
 
 
 # ---------------------------------------------------------------- applications
@@ -65,6 +73,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    # Fichiers statiques (admin Django, Swagger) servis par l'application elle-même (Vercel).
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -130,20 +140,53 @@ CORS_ALLOWED_ORIGINS = sorted({
 })
 # Nom du fichier exporté lisible par le frontend (téléchargements).
 CORS_EXPOSE_HEADERS = ['Content-Disposition']
+# Déploiements de prévisualisation Vercel du frontend (ex. https://memoai-git-xxx.vercel.app).
+CORS_ALLOWED_ORIGIN_REGEXES = env_list('CORS_ALLOWED_ORIGIN_REGEXES')
+
+# Formulaires de l'admin Django en HTTPS (Vercel) : origines de confiance pour la protection CSRF.
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS') + [
+    f'https://{h}' for h in ALLOWED_HOSTS if h not in ('localhost', '127.0.0.1') and not h.startswith('.')
+]
 
 
 # ---------------------------------------------------------------- base de données
 
-DATABASES = {
-    'default': {
+def database_from_url(url):
+    """postgresql://user:motdepasse@hote/base?sslmode=require (format fourni par Neon)."""
+    parts = urlparse(url)
+    if parts.scheme not in ('postgres', 'postgresql'):
+        raise ImproperlyConfigured('DATABASE_URL doit être une URL PostgreSQL (postgresql://...).')
+    options = dict(parse_qsl(parts.query))
+    options.setdefault('sslmode', 'require')
+    return {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'memoai'),
-        'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'Diakis7261'),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
+        'NAME': unquote(parts.path.lstrip('/')),
+        'USER': unquote(parts.username or ''),
+        'PASSWORD': unquote(parts.password or ''),
+        'HOST': parts.hostname or '',
+        'PORT': str(parts.port or 5432),
+        'OPTIONS': options,
+        # Serverless : pas de connexion persistante entre deux requêtes (Neon met la base en veille).
+        'CONN_MAX_AGE': int(os.environ.get('DB_CONN_MAX_AGE', '0')),
+        'CONN_HEALTH_CHECKS': True,
     }
-}
+
+
+# Production (Neon) : DATABASE_URL. Développement : variables DB_* du fichier .env.
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
+if DATABASE_URL:
+    DATABASES = {'default': database_from_url(DATABASE_URL)}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ.get('DB_NAME', 'memoai'),
+            'USER': os.environ.get('DB_USER', 'postgres'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'PORT': os.environ.get('DB_PORT', '5432'),
+        }
+    }
 
 
 # ---------------------------------------------------------------- Redis, Celery, Channels
@@ -229,13 +272,27 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+# Dossier rempli seulement par « collectstatic » (inutile sur Vercel grâce à WhiteNoise).
+STATIC_ROOT = BASE_DIR / 'staticfiles' if 'collectstatic' in sys.argv or (BASE_DIR / 'staticfiles').is_dir() else None
+# Sans étape collectstatic (Vercel) : WhiteNoise lit directement les fichiers statiques des applications.
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = DEBUG
 # Fichiers envoyés par les utilisateurs : dossier dédié, jamais la racine du projet
 # (sinon .env et le code source seraient téléchargeables).
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ---------------------------------------------------------------- production (HTTPS)
+
+if not DEBUG:
+    # Vercel termine le HTTPS en amont et transmet le protocole d'origine.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '0'))
 
 LOGGING = {
     'version': 1,

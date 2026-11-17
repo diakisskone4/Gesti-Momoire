@@ -1,0 +1,11 @@
+# Jamais envoyés à Vercel
+.env
+venv/
+frontend/
+media/
+staticfiles/
+__pycache__/
+*.pyc
+*.sqlite3
+find
+python
