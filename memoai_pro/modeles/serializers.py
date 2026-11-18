@@ -5,6 +5,7 @@ from .models import MemoirTemplate, TemplatePurchase
 
 class MemoirTemplateSerializer(serializers.ModelSerializer):
     owned = serializers.SerializerMethodField()
+    is_free = serializers.BooleanField(read_only=True)
     level_label = serializers.CharField(source='get_level_display', read_only=True)
     cover_label = serializers.CharField(source='get_cover_style_display', read_only=True)
     outline = serializers.SerializerMethodField()
@@ -13,13 +14,13 @@ class MemoirTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = MemoirTemplate
         fields = ['slug', 'name', 'tagline', 'description', 'level', 'level_label', 'domain', 'cover_style',
-                  'cover_label', 'accent_color', 'price', 'currency', 'owned', 'outline', 'structure']
+                  'cover_label', 'accent_color', 'price', 'currency', 'is_free', 'owned', 'outline', 'structure']
 
     def _owned_ids(self):
         return self.context.get('owned_ids', set())
 
     def get_owned(self, obj):
-        return obj.id in self._owned_ids()
+        return obj.is_free or obj.id in self._owned_ids()
 
     def get_outline(self, obj):
         """Aperçu public du plan : titres seulement."""

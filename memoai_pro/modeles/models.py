@@ -42,8 +42,13 @@ class MemoirTemplate(models.Model):
     def __str__(self):
         return self.name
 
+    @property
+    def is_free(self):
+        """Modèle à 0 FCFA : disponible pour tous les étudiants, sans paiement."""
+        return self.price <= 0
+
     def is_owned_by(self, user):
-        return self.purchases.filter(user=user, status=TemplatePurchase.PAID).exists()
+        return self.is_free or self.purchases.filter(user=user, status=TemplatePurchase.PAID).exists()
 
 
 class TemplatePurchase(models.Model):

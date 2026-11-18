@@ -33,7 +33,8 @@ def fake_response(status, body):
 class TemplatePurchaseTests(APITestCase):
     def setUp(self):
         self.user = make_user('etu@test.com')
-        self.template = MemoirTemplate.objects.get(slug='licence-classique')
+        # Modèle payant au style « classique » (licence-classique est gratuit).
+        self.template = MemoirTemplate.objects.get(slug='master-agronomie-environnement')
         self.client.force_authenticate(self.user)
 
     def purchase(self):
@@ -41,15 +42,37 @@ class TemplatePurchaseTests(APITestCase):
             res = self.client.post(f'/modeles/{self.template.slug}/purchase/')
         return res, req
 
-    def test_catalog_has_fourteen_templates_at_5000_xof(self):
+    def test_catalog_first_template_free_others_at_5000_xof(self):
         res = self.client.get('/modeles/')
         self.assertEqual(res.status_code, 200)
         self.assertEqual(len(res.data), 14)
-        self.assertEqual({(t['price'], t['currency']) for t in res.data}, {('5000.00', 'XOF')})
+        prices = {t['slug']: (t['price'], t['currency'], t['is_free']) for t in res.data}
+        self.assertEqual(prices.pop('licence-classique'), ('0.00', 'XOF', True))
+        self.assertEqual(set(prices.values()), {('5000.00', 'XOF', False)})
         self.assertEqual(len({t['cover_style'] for t in res.data}), 6)
         # Plan complet (conseils) réservé aux acheteurs ; titres visibles par tous.
-        self.assertIsNone(res.data[0]['structure'])
-        self.assertTrue(res.data[0]['outline'])
+        paid = next(t for t in res.data if not t['is_free'])
+        self.assertIsNone(paid['structure'])
+        self.assertTrue(paid['outline'])
+
+    def test_free_template_is_available_to_everyone_without_payment(self):
+        from projects.models import Project
+        free = MemoirTemplate.objects.get(slug='licence-classique')
+        data = next(t for t in self.client.get('/modeles/').data if t['slug'] == free.slug)
+        self.assertTrue(data['owned'])
+        self.assertTrue(data['structure'])  # conseils détaillés débloqués
+        self.assertNotIn('APERÇU', self.client.get(f'/modeles/{free.slug}/cover/').data['html'])
+        # Rien à payer : aucune session SasPay n'est créée.
+        with mock.patch('modeles.saspay.requests.request') as req:
+            res = self.client.post(f'/modeles/{free.slug}/purchase/')
+        self.assertEqual(res.status_code, 400)
+        req.assert_not_called()
+        self.assertFalse(TemplatePurchase.objects.exists())
+        # Application directe à un mémoire.
+        project = Project.objects.create(user=self.user, title='Mémoire', theme='Thème', desired_pages=40)
+        res = self.client.post(f'/modeles/{free.slug}/apply/', {'project_id': project.id})
+        self.assertEqual(res.status_code, 200)
+        self.assertGreater(res.data['chapters_created'], 0)
 
     def test_cover_preview_is_watermarked_until_purchased(self):
         res = self.client.get(f'/modeles/{self.template.slug}/cover/')

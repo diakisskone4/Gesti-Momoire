@@ -216,6 +216,8 @@ export interface MemoirTemplate {
   accent_color: string;
   price: string;
   currency: string;
+  /** Modèle à 0 FCFA, disponible pour tous sans paiement. */
+  is_free?: boolean;
   owned: boolean;
   outline: TemplateOutlineItem[];
   structure: TemplateStructureItem[] | null;

@@ -248,3 +248,4 @@ svg.lucide { flex: none; }
 .tpl-outline small { display: block; color: var(--text-muted); font-size: 12px; }
 .tpl-outline li.muted strong { font-weight: 500; }
 @media (max-width: 720px) { .tpl-detail { grid-template-columns: 1fr; } .tpl-detail > div:first-child { max-width: 260px; margin: 0 auto; } }
+.tpl-owned.tpl-free { background: #0f766e; letter-spacing: .3px; }

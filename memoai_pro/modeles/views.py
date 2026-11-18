@@ -25,8 +25,10 @@ logger = logging.getLogger(__name__)
 
 
 def owned_template_ids(user):
-    return set(TemplatePurchase.objects.filter(user=user, status=TemplatePurchase.PAID)
-               .values_list('template_id', flat=True))
+    """Modèles achetés par l'utilisateur + modèles gratuits (disponibles pour tous)."""
+    paid = TemplatePurchase.objects.filter(user=user, status=TemplatePurchase.PAID).values_list('template_id', flat=True)
+    free = MemoirTemplate.objects.filter(price__lte=0).values_list('id', flat=True)
+    return set(paid) | set(free)
 
 
 def saspay_error(e):
@@ -65,6 +67,8 @@ class MemoirTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     def purchase(self, request, slug=None):
         template = self.get_object()
         user = request.user
+        if template.is_free:
+            raise ValidationError({"error": "Ce modèle est gratuit : vous pouvez l'utiliser directement."})
         if template.is_owned_by(user):
             raise ValidationError({'error': 'Vous possédez déjà ce modèle.'})
 

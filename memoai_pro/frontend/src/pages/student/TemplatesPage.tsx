@@ -91,7 +91,7 @@ export default function TemplatesPage() {
   }, [searchParams, setSearchParams, toast, load]);
 
   const visible = useMemo(() => (templates ?? []).filter(t =>
-    filter === 'ALL' ? true : filter === 'OWNED' ? t.owned : t.level === filter || t.level === ''), [templates, filter]);
+    filter === 'ALL' ? true : filter === 'OWNED' ? t.owned && !t.is_free : t.level === filter || t.level === ''), [templates, filter]);
 
   const buy = async (t: MemoirTemplate) => {
     setBuying(t.slug);
@@ -116,7 +116,8 @@ export default function TemplatesPage() {
     }
   };
 
-  const ownedCount = templates?.filter(t => t.owned).length ?? 0;
+  const ownedCount = templates?.filter(t => t.owned && !t.is_free).length ?? 0;
+  const paidSample = templates?.find(t => !t.is_free);
 
   return (
     <Layout>
@@ -126,9 +127,9 @@ export default function TemplatesPage() {
             <div>
               <span className="eyebrow">Modèles de mémoire</span>
               <h2>Des modèles prêts à rédiger</h2>
-              <p>Page de garde aux normes universitaires et plan commenté section par section. Achat unique de
-                {templates?.[0] ? ` ${formatPrice(templates[0].price, templates[0].currency)}` : ' 5 000 FCFA'} par
-                modèle, utilisable sur tous vos mémoires.</p>
+              <p>Page de garde aux normes universitaires et plan commenté section par section.
+                {templates?.some(t => t.is_free) && ' Un modèle est offert gratuitement.'} Les autres s'achètent une seule fois
+                {paidSample ? ` (${formatPrice(paidSample.price, paidSample.currency)})` : ''} et s'utilisent sur tous vos mémoires.</p>
             </div>
             <button className="btn" onClick={load}>↻ Actualiser</button>
           </div>
@@ -164,7 +165,8 @@ export default function TemplatesPage() {
               <article key={t.slug} className="tpl-card" style={{ '--tpl-accent': t.accent_color } as React.CSSProperties}>
                 <button type="button" className="tpl-cover" onClick={() => setDetail(t)} aria-label={`Voir le modèle ${t.name}`}>
                   <CoverFrame html={covers[t.slug] ?? null} title={`Page de garde ${t.name}`} />
-                  {t.owned && <span className="tpl-owned">✓ Acheté</span>}
+                  {t.is_free ? <span className="tpl-owned tpl-free">Gratuit</span>
+                    : t.owned && <span className="tpl-owned">✓ Acheté</span>}
                 </button>
                 <div className="tpl-body">
                   <div className="meta">
@@ -175,7 +177,7 @@ export default function TemplatesPage() {
                   <p className="theme">{t.tagline}</p>
                   <p className="tpl-domain">📚 {t.domain}</p>
                   <div className="tpl-footer">
-                    <strong className="tpl-price">{t.owned ? 'Acheté' : formatPrice(t.price, t.currency)}</strong>
+                    <strong className="tpl-price">{t.is_free ? 'Gratuit' : t.owned ? 'Acheté' : formatPrice(t.price, t.currency)}</strong>
                     <div className="actions" style={{ marginTop: 0 }}>
                       <button className="btn" onClick={() => setDetail(t)}>Voir le plan</button>
                       {t.owned
