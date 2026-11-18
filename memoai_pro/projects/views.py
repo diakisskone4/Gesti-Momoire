@@ -256,16 +256,29 @@ class ProjectViewSet(viewsets.ModelViewSet):
             for line in self._meta_lines(project):
                 fmt.centered_docx_paragraph(doc, line, 12, space_after_pt=6)
 
-        # La première partie commence sur une nouvelle page grâce au style « Titre 1 ».
+        # Pages liminaires en chiffres romains (i, ii...), corps du mémoire en chiffres arabes (1, 2...) :
+        # chaque changement de numérotation ouvre une nouvelle section Word (donc une nouvelle page).
+        numbering = None
+
+        def docx_heading(title, level, number_format):
+            nonlocal numbering
+            new_part = level == 1 and number_format != numbering
+            if new_part:
+                fmt.start_docx_part(doc, number_format)
+                numbering = number_format
+            paragraph = doc.add_heading(title, level=min(level, 4))
+            if new_part:
+                paragraph.paragraph_format.page_break_before = False  # la section commence déjà une page
+
         if include_chapters:
             for level, chapter in self._outline(project):
-                doc.add_heading(chapter.title, level=min(level, 4))
+                docx_heading(chapter.title, level, fmt.numbering_of(level, chapter))
                 fmt.add_docx_body(doc, chapter.content)
 
         if include_bibliography:
             refs = project.references.all().order_by('authors', 'year')
             if refs:
-                doc.add_heading('Bibliographie', level=1)
+                docx_heading('Bibliographie', 1, fmt.MAIN_MATTER)
                 for ref in refs:
                     paragraph = doc.add_paragraph(format_reference(ref))
                     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -290,7 +303,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
         from . import document_format as fmt
 
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, title=project.title, author=project.user.full_name,
+        MemoirDocTemplate, NumberingStart = fmt.pdf_classes()
+        doc = MemoirDocTemplate(buffer, pagesize=A4, title=project.title, author=project.user.full_name,
                                 **fmt.pdf_margins())
         body, item, headings = fmt.pdf_styles()
 
@@ -316,15 +330,22 @@ class ProjectViewSet(viewsets.ModelViewSet):
             story.append(centered(project.title.upper(), 20, 'Times-Bold', space_after=36))
             story += [centered(line, 12, space_after=6) for line in self._meta_lines(project)]
 
-        def heading(level, title):
+        numbering = None
+
+        def heading(level, title, number_format=fmt.MAIN_MATTER):
+            nonlocal numbering
             if level == 1:
                 story.append(PageBreak())  # chaque partie commence sur une nouvelle page
+                if number_format != numbering:
+                    # Pages liminaires : i, ii... ; corps du mémoire : 1, 2... (chacune repart de 1).
+                    story.append(NumberingStart(number_format))
+                    numbering = number_format
                 title = title.upper()
             story.append(Paragraph(escape(title), headings[min(level, 3)]))
 
         if include_chapters:
             for level, chapter in self._outline(project):
-                heading(level, chapter.title)
+                heading(level, chapter.title, fmt.numbering_of(level, chapter))
                 for text, is_item in fmt.body_paragraphs(chapter.content):
                     story.append(Paragraph(escape(text), item if is_item else body))
 
@@ -335,7 +356,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 ref_style = ParagraphStyle('reference', parent=body, alignment=0, firstLineIndent=-1 * cm, leftIndent=1 * cm)
                 story += [Paragraph(escape(format_reference(r)), ref_style) for r in refs]
 
-        doc.build(story, onFirstPage=lambda canvas, d: None, onLaterPages=fmt.draw_pdf_page_number)
+        doc.build(story)
         buffer.seek(0)
         return FileResponse(buffer, as_attachment=True, filename=safe_filename(project.title, 'pdf'),
                             content_type='application/pdf')

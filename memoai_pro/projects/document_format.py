@@ -100,22 +100,77 @@ def setup_docx(doc):
         # Chaque partie de premier niveau commence sur une nouvelle page.
         hfmt.page_break_before = level == 1
 
-    # Numéro de page centré en bas, absent de la première page (page de garde).
-    for section in doc.sections:
-        section.different_first_page_header_footer = True
-        paragraph = section.footer.paragraphs[0]
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.paragraph_format.first_line_indent = Cm(0)
-        paragraph.paragraph_format.space_before = Pt(0)
-        paragraph.paragraph_format.space_after = Pt(0)
-        field = OxmlElement('w:fldSimple')
-        field.set(qn('w:instr'), 'PAGE')
-        run = OxmlElement('w:r')
-        text = OxmlElement('w:t')
-        text.text = '1'
-        run.append(text)
-        field.append(run)
-        paragraph._p.append(field)
+    # La première section (page de garde) n'a pas de numéro : les pages liminaires et le corps
+    # du mémoire sont ouverts ensuite par start_docx_part(), chacun avec sa numérotation.
+
+
+# Numérotation : pages liminaires (dédicace → liste des tableaux) en chiffres romains minuscules,
+# corps du mémoire (introduction → annexes) en chiffres arabes, chacune repartant de 1.
+FRONT_MATTER, MAIN_MATTER = 'lowerRoman', 'decimal'
+# Éléments de w:sectPr situés après w:pgNumType (l'ordre est imposé par le format Word).
+_SECTPR_AFTER_PGNUMTYPE = ('w:cols', 'w:formProt', 'w:vAlign', 'w:noEndnote', 'w:titlePg', 'w:textDirection',
+                           'w:bidi', 'w:rtlGutter', 'w:docGrid', 'w:printerSettings')
+
+
+def numbering_of(level, chapter):
+    """Numérotation d'une partie de premier niveau : romaine pour les pages liminaires, arabe sinon."""
+    return FRONT_MATTER if chapter.type == 'preliminary' else MAIN_MATTER
+
+
+def _set_page_numbering(section, number_format):
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    sect_pr = section._sectPr
+    pg_num = sect_pr.find(qn('w:pgNumType'))
+    if pg_num is None:
+        pg_num = OxmlElement('w:pgNumType')
+        successor = next((el for tag in _SECTPR_AFTER_PGNUMTYPE if (el := sect_pr.find(qn(tag))) is not None), None)
+        if successor is not None:
+            successor.addprevious(pg_num)
+        else:
+            sect_pr.append(pg_num)
+    pg_num.set(qn('w:fmt'), number_format)
+    pg_num.set(qn('w:start'), '1')
+
+
+def _add_page_number_footer(section):
+    """Numéro de page centré en bas (champ PAGE, mis à jour par Word)."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Cm, Pt
+    footer = section.footer
+    footer.is_linked_to_previous = False
+    paragraph = footer.paragraphs[0]
+    for child in list(paragraph._p):
+        if child.tag != qn('w:pPr'):
+            paragraph._p.remove(child)
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    paragraph.paragraph_format.first_line_indent = Cm(0)
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(0)
+    field = OxmlElement('w:fldSimple')
+    field.set(qn('w:instr'), 'PAGE')
+    run = OxmlElement('w:r')
+    text = OxmlElement('w:t')
+    text.text = '1'
+    run.append(text)
+    field.append(run)
+    paragraph._p.append(field)
+
+
+def start_docx_part(doc, number_format):
+    """Nouvelle section sur une nouvelle page, numérotée à partir de 1 dans le format donné."""
+    from docx.enum.section import WD_SECTION
+    from docx.shared import Cm
+    section = doc.add_section(WD_SECTION.NEW_PAGE)
+    section.left_margin = Cm(MARGINS_CM['left'])
+    section.right_margin = Cm(MARGINS_CM['right'])
+    section.top_margin = Cm(MARGINS_CM['top'])
+    section.bottom_margin = Cm(MARGINS_CM['bottom'])
+    _set_page_numbering(section, number_format)
+    _add_page_number_footer(section)
+    return section
 
 
 def add_docx_body(doc, content):
@@ -185,13 +240,50 @@ def pdf_margins():
     }
 
 
-def draw_pdf_page_number(canvas, doc):
-    """Numéro de page centré sous le bloc de texte (pages suivant la page de garde)."""
+def to_roman(number):
+    """4 → « iv » (chiffres romains minuscules des pages liminaires)."""
+    result = ''
+    for value, letters in ((1000, 'm'), (900, 'cm'), (500, 'd'), (400, 'cd'), (100, 'c'), (90, 'xc'), (50, 'l'),
+                           (40, 'xl'), (10, 'x'), (9, 'ix'), (5, 'v'), (4, 'iv'), (1, 'i')):
+        while number >= value:
+            result += letters
+            number -= value
+    return result
+
+
+def pdf_classes():
+    """Gabarit PDF qui numérote chaque page selon la partie en cours (aucun numéro sur la page de garde)."""
     from reportlab.lib.units import cm
-    canvas.saveState()
-    canvas.setFont('Times-Roman', 11)
-    canvas.drawCentredString(doc.leftMargin + doc.width / 2, 1.3 * cm, str(doc.page))
-    canvas.restoreState()
+    from reportlab.platypus import Flowable, SimpleDocTemplate
+
+    class NumberingStart(Flowable):
+        """Marqueur invisible : à partir de cette page, numérotation `number_format` en repartant de 1."""
+
+        def __init__(self, number_format):
+            super().__init__()
+            self.number_format = number_format
+            self.width = self.height = 0
+
+        def wrap(self, *args):
+            return 0, 0
+
+        def draw(self):
+            self.canv._memoai_numbering = (self.number_format, self.canv.getPageNumber())
+
+    class MemoirDocTemplate(SimpleDocTemplate):
+        def afterPage(self):
+            numbering = getattr(self.canv, '_memoai_numbering', None)
+            if not numbering:
+                return  # page de garde
+            number_format, first_page = numbering
+            number = self.canv.getPageNumber() - first_page + 1
+            label = to_roman(number) if number_format == FRONT_MATTER else str(number)
+            self.canv.saveState()
+            self.canv.setFont('Times-Roman', 11)
+            self.canv.drawCentredString(self.leftMargin + self.width / 2, 1.3 * cm, label)
+            self.canv.restoreState()
+
+    return MemoirDocTemplate, NumberingStart
 
 
 # ------------------------------------------------------------------ HTML (impression navigateur)

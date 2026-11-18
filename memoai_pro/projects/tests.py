@@ -112,11 +112,17 @@ class AcademicExportFormatTests(APITestCase):
         from docx.shared import Cm, Pt
         doc = Document(BytesIO(self.export('docx')))
 
-        section = doc.sections[0]
-        self.assertEqual((round(section.left_margin.cm, 2), round(section.right_margin.cm, 2),
-                          round(section.top_margin.cm, 2), round(section.bottom_margin.cm, 2)), (4.0, 2.5, 2.5, 2.5))
-        self.assertTrue(section.different_first_page_header_footer)  # pas de numéro sur la page de garde
-        self.assertIn('PAGE', section.footer._element.xml)
+        from docx.oxml.ns import qn
+        # Page de garde sans numéro, pages liminaires en chiffres romains, corps en chiffres arabes.
+        cover, front, main = doc.sections
+        for section in doc.sections:
+            self.assertEqual((round(section.left_margin.cm, 2), round(section.right_margin.cm, 2),
+                              round(section.top_margin.cm, 2), round(section.bottom_margin.cm, 2)), (4.0, 2.5, 2.5, 2.5))
+        self.assertNotIn('PAGE', cover.footer._element.xml)
+        for section, number_format in ((front, 'lowerRoman'), (main, 'decimal')):
+            pg_num = section._sectPr.find(qn('w:pgNumType'))
+            self.assertEqual((pg_num.get(qn('w:fmt')), pg_num.get(qn('w:start'))), (number_format, '1'))
+            self.assertIn('PAGE', section.footer._element.xml)
 
         normal = doc.styles['Normal']
         self.assertEqual((normal.font.name, normal.font.size), ('Times New Roman', Pt(12)))
@@ -156,10 +162,11 @@ class AcademicExportFormatTests(APITestCase):
             self.assertIn(title, page)
         self.assertIn('Définition des concepts', pages[4])
         self.assertNotIn('Conseil du modèle', ''.join(pages))
-        # Numéro de page sur les pages 2 à 5 (dessiné avant le texte, donc extrait en premier), rien sur la page de titre.
-        for number, page in enumerate(pages[1:], start=2):
-            self.assertEqual(page.strip().splitlines()[0].strip(), str(number))
+        # Dédicace et remerciements : i, ii ; à partir de l'introduction : 1, 2 ; rien sur la page de titre.
+        numbers = [page.strip().splitlines()[-1].strip() for page in pages[1:]]
+        self.assertEqual(numbers, ['i', 'ii', '1', '2'])
         self.assertTrue(pages[0].startswith('MOBILE MONEY AU MALI'))
+        self.assertNotIn(pages[0].strip().splitlines()[-1].strip(), ('1', 'i'))
         fonts = set()
         for page in reader.pages:
             for font in page['/Resources']['/Font'].values():
