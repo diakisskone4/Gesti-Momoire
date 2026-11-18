@@ -235,41 +235,44 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ]
 
     def export_docx(self, project, include_chapters, include_bibliography):
+        """Word aux normes académiques (voir projects/document_format.py)."""
+        from . import document_format as fmt
         doc = Document()
+        fmt.setup_docx(doc)
+
         cover = self._cover(project)
         if cover:
-            from docx.enum.text import WD_ALIGN_PARAGRAPH
-            from docx.shared import Pt
             from modeles.covers import cover_lines
             sizes = {'title': 20, 'header': 13, 'diploma': 12, 'person': 12, 'footer': 12, 'motto': 10, 'small': 10}
             for text, role in cover_lines(cover[1]):
-                para = doc.add_paragraph()
-                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 if role == 'space':
+                    fmt.centered_docx_paragraph(doc, '', 12, space_after_pt=12)
                     continue
-                run = para.add_run(text)
-                run.font.size = Pt(sizes.get(role, 11))
-                run.bold = role in ('title', 'header', 'footer')
-                run.italic = role in ('motto', 'diploma')
-            doc.add_page_break()
+                fmt.centered_docx_paragraph(doc, text, sizes.get(role, 11), bold=role in ('title', 'header', 'footer'),
+                                            italic=role in ('motto', 'diploma'))
         else:
-            doc.add_heading(project.title, 0)
+            fmt.centered_docx_paragraph(doc, '', 12, space_after_pt=150)
+            fmt.centered_docx_paragraph(doc, project.title.upper(), 20, bold=True, space_after_pt=36)
             for line in self._meta_lines(project):
-                doc.add_paragraph(line)
+                fmt.centered_docx_paragraph(doc, line, 12, space_after_pt=6)
 
+        # La première partie commence sur une nouvelle page grâce au style « Titre 1 ».
         if include_chapters:
             for level, chapter in self._outline(project):
                 doc.add_heading(chapter.title, level=min(level, 4))
-                for para in (chapter.content or '').split('\n'):
-                    if para.strip():
-                        doc.add_paragraph(para)
+                fmt.add_docx_body(doc, chapter.content)
 
         if include_bibliography:
             refs = project.references.all().order_by('authors', 'year')
             if refs:
                 doc.add_heading('Bibliographie', level=1)
                 for ref in refs:
-                    doc.add_paragraph(format_reference(ref))
+                    paragraph = doc.add_paragraph(format_reference(ref))
+                    from docx.enum.text import WD_ALIGN_PARAGRAPH
+                    from docx.shared import Cm
+                    paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    paragraph.paragraph_format.left_indent = Cm(1)
+                    paragraph.paragraph_format.first_line_indent = Cm(-1)
 
         buffer = BytesIO()
         doc.save(buffer)
@@ -280,52 +283,66 @@ class ProjectViewSet(viewsets.ModelViewSet):
         )
 
     def export_pdf(self, project, include_chapters, include_bibliography):
+        """PDF aux normes académiques (voir projects/document_format.py)."""
+        from reportlab.lib.enums import TA_CENTER
+        from reportlab.lib.styles import ParagraphStyle
+        from reportlab.platypus import PageBreak
+        from . import document_format as fmt
+
         buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=2.5 * cm, rightMargin=2.5 * cm,
-                                topMargin=2.5 * cm, bottomMargin=2.5 * cm, title=project.title)
-        styles = getSampleStyleSheet()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, title=project.title, author=project.user.full_name,
+                                **fmt.pdf_margins())
+        body, item, headings = fmt.pdf_styles()
+
+        def centered(text, size, font='Times-Roman', space_after=0):
+            style = ParagraphStyle(f'centre-{size}-{font}', fontName=font, fontSize=size, leading=size * 1.35,
+                                   alignment=TA_CENTER, spaceAfter=space_after)
+            return Paragraph(escape(text), style)
+
+        story = []
         cover = self._cover(project)
         if cover:
-            from reportlab.lib.enums import TA_CENTER
-            from reportlab.lib.styles import ParagraphStyle
-            from reportlab.platypus import PageBreak
             from modeles.covers import cover_lines
             sizes = {'title': 20, 'header': 12, 'diploma': 12, 'person': 12, 'footer': 12, 'motto': 10, 'small': 10}
-            story = []
             for text, role in cover_lines(cover[1]):
                 if role == 'space':
                     story.append(Spacer(1, 1.2 * cm))
                     continue
-                font = 'Helvetica-Bold' if role in ('title', 'header', 'footer') else (
-                    'Helvetica-Oblique' if role in ('motto', 'diploma') else 'Helvetica')
-                style = ParagraphStyle(f'cover-{role}', parent=styles['Normal'], alignment=TA_CENTER, fontName=font,
-                                       fontSize=sizes.get(role, 11), leading=sizes.get(role, 11) * 1.35)
-                story.append(Paragraph(escape(text), style))
-            story.append(PageBreak())
+                font = 'Times-Bold' if role in ('title', 'header', 'footer') else (
+                    'Times-Italic' if role in ('motto', 'diploma') else 'Times-Roman')
+                story.append(centered(text, sizes.get(role, 11), font))
         else:
-            story = [Paragraph(escape(project.title), styles['Title'])]
-            story += [Paragraph(escape(line), styles['Normal']) for line in self._meta_lines(project)]
-            story.append(Spacer(1, 0.8 * cm))
+            story.append(Spacer(1, 6 * cm))
+            story.append(centered(project.title.upper(), 20, 'Times-Bold', space_after=36))
+            story += [centered(line, 12, space_after=6) for line in self._meta_lines(project)]
+
+        def heading(level, title):
+            if level == 1:
+                story.append(PageBreak())  # chaque partie commence sur une nouvelle page
+                title = title.upper()
+            story.append(Paragraph(escape(title), headings[min(level, 3)]))
 
         if include_chapters:
             for level, chapter in self._outline(project):
-                story.append(Paragraph(escape(chapter.title), styles[f'Heading{min(level, 3)}']))
-                for para in (chapter.content or '').split('\n'):
-                    if para.strip():
-                        story.append(Paragraph(escape(para), styles['BodyText']))
+                heading(level, chapter.title)
+                for text, is_item in fmt.body_paragraphs(chapter.content):
+                    story.append(Paragraph(escape(text), item if is_item else body))
 
         if include_bibliography:
             refs = project.references.all().order_by('authors', 'year')
             if refs:
-                story.append(Paragraph('Bibliographie', styles['Heading1']))
-                story += [Paragraph(escape(format_reference(r)), styles['BodyText']) for r in refs]
+                heading(1, 'Bibliographie')
+                ref_style = ParagraphStyle('reference', parent=body, alignment=0, firstLineIndent=-1 * cm, leftIndent=1 * cm)
+                story += [Paragraph(escape(format_reference(r)), ref_style) for r in refs]
 
-        doc.build(story)
+        doc.build(story, onFirstPage=lambda canvas, d: None, onLaterPages=fmt.draw_pdf_page_number)
         buffer.seek(0)
         return FileResponse(buffer, as_attachment=True, filename=safe_filename(project.title, 'pdf'),
                             content_type='application/pdf')
 
     def export_html(self, project, include_chapters, include_bibliography):
+        """HTML imprimable aux mêmes normes (Times New Roman, marges, une partie par page)."""
+        from . import document_format as fmt
         cover_css = ''
         cover = self._cover(project)
         if cover:
@@ -334,26 +351,27 @@ class ProjectViewSet(viewsets.ModelViewSet):
             cover_css += '.page{margin:0 auto 40px;box-shadow:0 2px 12px #0002;page-break-after:always}'
             body = [cover_html]
         else:
-            body = [f'<h1>{escape(project.title)}</h1>']
+            body = [f'<p class="titre-page" style="font-size:20pt;font-weight:bold;margin-top:6cm">{escape(project.title.upper())}</p>']
             body += [f'<p class="meta">{escape(line)}</p>' for line in self._meta_lines(project)]
-            body.append('<hr>')
         if include_chapters:
             for level, chapter in self._outline(project):
-                tag = f'h{min(level + 1, 6)}'
-                body.append(f'<{tag}>{escape(chapter.title)}</{tag}>')
-                body += [f'<p>{escape(p)}</p>' for p in (chapter.content or '').split('\n') if p.strip()]
+                if level == 1:
+                    body.append(f'<h2 class="chapitre">{escape(chapter.title)}</h2>')
+                else:
+                    tag = f'h{min(level + 1, 6)}'
+                    body.append(f'<{tag}>{escape(chapter.title)}</{tag}>')
+                body += [f'<p class="item">{escape(t)}</p>' if is_item else f'<p>{escape(t)}</p>'
+                         for t, is_item in fmt.body_paragraphs(chapter.content)]
         if include_bibliography:
             refs = project.references.all().order_by('authors', 'year')
             if refs:
-                body.append('<h2>Bibliographie</h2>')
+                body.append('<h2 class="chapitre">Bibliographie</h2>')
                 body += [f'<p class="ref">{escape(format_reference(r))}</p>' for r in refs]
 
         html = (
             '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">'
             f'<title>{escape(project.title)}</title><style>'
-            'body{font-family:Georgia,serif;max-width:860px;margin:0 auto;padding:24px;line-height:1.7;color:#173e3a}'
-            'h1{color:#0f766e}.meta{margin:2px 0;color:#555}.ref{padding-left:2em;text-indent:-2em}'
-            + cover_css + '</style></head><body>' + ''.join(body) + '</body></html>'
+            + fmt.HTML_CSS + cover_css + '</style></head><body>' + ''.join(body) + '</body></html>'
         )
         response = HttpResponse(html, content_type='text/html; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="{safe_filename(project.title, "html")}"'
