@@ -46,6 +46,9 @@ export const chaptersApi = {
   create: (data: Partial<Chapter>) => request<Chapter>('/projects/chapters/', { method: 'POST', body: data }),
   update: (id: number, data: Partial<Chapter>) => request<Chapter>(`/projects/chapters/${id}/`, { method: 'PATCH', body: data }),
   remove: (id: number) => request(`/projects/chapters/${id}/`, { method: 'DELETE' }),
+  /** Rédaction par l'IA d'un chapitre (intro + sections vides), du résumé ou des sigles. */
+  generateContent: (id: number) =>
+    request<{ written: number; chapters: Chapter[] }>(`/projects/chapters/${id}/generate_content/`, { method: 'POST', body: {} }),
 };
 
 export const referencesApi = {

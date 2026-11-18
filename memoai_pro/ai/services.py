@@ -23,8 +23,58 @@ ACADEMIC_SYSTEM = (
     "Vous êtes l'assistant académique de MemoAI Pro. Vous aidez des étudiants à rédiger "
     "leur mémoire ou leur thèse universitaire. Répondez en français sauf demande contraire, "
     "dans un registre académique clair. N'inventez jamais de références : si vous citez un "
-    "ouvrage ou un article, signalez qu'il doit être vérifié par l'étudiant."
+    "ouvrage ou un article, signalez qu'il doit être vérifié par l'étudiant.\n\n"
+    "Présentation : rédigez en texte brut, en paragraphes soignés, sans aucune mise en forme "
+    "Markdown (pas d'astérisques, de dièses, de tirets de liste ni de texte en gras ou en italique). "
+    "Pour une énumération, utilisez une liste numérotée simple (1., 2., 3.) ou des phrases, "
+    "sauf si la demande impose explicitement un autre format."
 )
+
+
+# Mise en forme Markdown que les modèles ajoutent malgré la consigne : retirée avant affichage.
+_MD_FENCE = re.compile(r'^\s*```.*$', re.MULTILINE)
+_MD_HEADING = re.compile(r'^\s{0,3}#{1,6}\s+', re.MULTILINE)
+_MD_RULE = re.compile(r'^\s*([-*_])(\s*\1){2,}\s*$', re.MULTILINE)
+_MD_QUOTE = re.compile(r'^\s*>\s?', re.MULTILINE)
+_MD_BULLET = re.compile(r'^(\s*)[-*+•]\s+', re.MULTILINE)
+_MD_BOLD = re.compile(r'(\*\*|__)(?=\S)(.+?)(?<=\S)\1', re.DOTALL)
+_MD_ITALIC_STAR = re.compile(r'(?<![\w*])\*(?=\S)([^*\n]+?)(?<=\S)\*(?![\w*])')
+_MD_ITALIC_UNDERSCORE = re.compile(r'(?<![\w_])_(?=\S)([^_\n]+?)(?<=\S)_(?![\w_])')
+_MD_CODE = re.compile(r'`([^`\n]+)`')
+_MD_LINK = re.compile(r'\[([^\]\n]+)\]\((https?://[^)\s]+)\)')
+
+
+def clean_ai_text(text):
+    """Texte professionnel sans symboles Markdown : « **Plan** : … » → « Plan : … »,
+    « - item » → « • item », titres « ## … » → simple ligne. Les mentions entre crochets
+    ([source à compléter]) et les listes numérotées (1., 2.) sont conservées."""
+    if not text:
+        return text
+    text = _MD_FENCE.sub('', text)
+    text = _MD_RULE.sub('', text)
+    text = _MD_HEADING.sub('', text)
+    text = _MD_QUOTE.sub('', text)
+    text = _MD_BULLET.sub(lambda m: m.group(1) + '• ', text)
+    text = _MD_LINK.sub(r'\1 (\2)', text)
+    for _ in range(2):  # gras imbriqué dans de l'italique, ou l'inverse
+        text = _MD_BOLD.sub(r'\2', text)
+        text = _MD_ITALIC_STAR.sub(r'\1', text)
+        text = _MD_ITALIC_UNDERSCORE.sub(r'\1', text)
+    text = _MD_CODE.sub(r'\1', text)
+    text = text.replace('**', '')
+    text = re.sub(r'[ \t]+\n', '\n', text)
+    return re.sub(r'\n{3,}', '\n\n', text).strip()
+
+
+def _clean_strings(value):
+    """Nettoie récursivement les textes d'une réponse JSON (plan, relecture)."""
+    if isinstance(value, str):
+        return clean_ai_text(value)
+    if isinstance(value, list):
+        return [_clean_strings(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _clean_strings(v) for k, v in value.items()}
+    return value
 
 
 class AIError(Exception):
@@ -404,7 +454,8 @@ class AIService:
             "figures, tableaux, références, annexes et glossaire. N'incluez pas les pages liminaires "
             "(dédicace, remerciements, résumé), ni la bibliographie, ni les annexes dans les chapitres."
         )
-        return _ask(prompt, schema=PLAN_SCHEMA, openrouter_max_tokens=3000)
+        plan = json.loads(_ask(prompt, schema=PLAN_SCHEMA, openrouter_max_tokens=3000))
+        return json.dumps(_clean_strings(plan), ensure_ascii=False)
 
     @staticmethod
     def write_chapter(context, chapter_title, chapter_guidance, sections, words_per_section, language='fr'):
@@ -432,7 +483,38 @@ class AIService:
             "[source à compléter] ou [donnée à vérifier]."
         )
         text = _ask(prompt, openrouter_max_tokens=6000, allow_truncated=True)
-        return parse_chapter_text(text, len(sections))
+        result = parse_chapter_text(text, len(sections))
+        result['intro'] = clean_ai_text(result['intro'])
+        result['sections'] = {n: clean_ai_text(body) for n, body in result['sections'].items()}
+        return result
+
+    @staticmethod
+    def write_abstract(context, text, language='fr'):
+        """Résumé du mémoire (avec mots-clés) puis sa traduction anglaise (Abstract, Keywords)."""
+        lang = LANGUAGES.get(language, 'français')
+        prompt = (
+            f"Rédigez en {lang} le résumé du mémoire universitaire ci-dessous, à partir de son contenu réel.\n"
+            f"<memoire>{context}</memoire>\n<texte>{text}</texte>\n\n"
+            "Format attendu, sans aucune mise en forme Markdown :\n"
+            "Un paragraphe de 200 à 300 mots : contexte, objectif, méthodologie, principaux résultats, conclusion.\n"
+            "Une ligne « Mots-clés : » suivie de 4 à 6 mots-clés séparés par des virgules.\n"
+            "Une ligne « Abstract »\nLa traduction anglaise fidèle du résumé.\n"
+            "Une ligne « Keywords: » suivie des mots-clés en anglais.\n\n"
+            "N'ajoutez aucun résultat, chiffre ou référence qui ne figure pas dans le texte."
+        )
+        return clean_ai_text(_ask(prompt, openrouter_max_tokens=2500))
+
+    @staticmethod
+    def list_acronyms(text):
+        """Sigles et abréviations réellement employés dans le texte, avec leur signification."""
+        result = clean_ai_text(_ask(
+            "Relevez tous les sigles et abréviations employés dans le texte ci-dessous. Écrivez une ligne par "
+            "sigle, au format « SIGLE : signification complète », par ordre alphabétique, sans autre texte. "
+            "Si la signification n'est pas certaine d'après le texte, ajoutez « [à vérifier] ». "
+            f"S'il n'y en a aucun, répondez seulement AUCUN.\n\n<texte>{text}</texte>",
+            openrouter_max_tokens=1500,
+        ))
+        return '' if result.strip().upper().rstrip('.') == 'AUCUN' else result
 
     @staticmethod
     def chat(message, project_id, user):
@@ -442,12 +524,12 @@ class AIService:
             if project:
                 system += f"\n\nL'étudiant travaille sur un mémoire de niveau {project.level} intitulé « {project.title} »"
                 system += f", sur le thème : {project.theme}." if project.theme else '.'
-        return _ask(message, system=system)
+        return clean_ai_text(_ask(message, system=system))
 
     @staticmethod
     def verify(content):
         """IA scientifique : incohérences et affirmations sans source (§3.7)."""
-        return json.loads(_ask(
+        return _clean_strings(json.loads(_ask(
             "Relisez ce passage de mémoire comme un relecteur scientifique exigeant. Relevez les "
             "incohérences, les affirmations qui nécessiteraient une source, les imprécisions et "
             "les problèmes de style académique. Si le texte ne pose pas de problème, renvoyez une "
@@ -455,30 +537,30 @@ class AIService:
             effort='high',
             schema=VERIFY_SCHEMA,
             openrouter_max_tokens=2000,
-        ))
+        )))
 
     @staticmethod
     def reformulate(text, style='academic'):
         style_label = REFORMULATION_STYLES.get(style, REFORMULATION_STYLES['academic'])
-        return _ask(
+        return clean_ai_text(_ask(
             f"Reformulez le texte suivant dans {style_label}, en conservant son sens et sa langue. "
             f"Renvoyez uniquement le texte reformulé.\n\n<texte>{text}</texte>",
             effort='low',
-        )
+        ))
 
     @staticmethod
     def summarize(text):
-        return _ask(
+        return clean_ai_text(_ask(
             "Résumez le texte suivant en un paragraphe académique qui conserve les idées clés. "
             f"Renvoyez uniquement le résumé.\n\n<texte>{text}</texte>",
             effort='low',
-        )
+        ))
 
     @staticmethod
     def translate(text, target_lang='en'):
         language = LANGUAGES.get(target_lang, target_lang)
-        return _ask(
+        return clean_ai_text(_ask(
             f"Traduisez le texte suivant en {language}, dans un registre académique. "
             f"Renvoyez uniquement la traduction.\n\n<texte>{text}</texte>",
             effort='low',
-        )
+        ))

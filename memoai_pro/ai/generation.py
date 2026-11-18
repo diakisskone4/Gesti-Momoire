@@ -5,6 +5,7 @@ Le texte écrit par l'étudiant n'est jamais écrasé : seuls les chapitres vide
 contenant uniquement un conseil de modèle (« [Conseil du modèle : ...] ») sont remplacés.
 """
 import re
+import unicodedata
 
 from django.db import transaction
 from rest_framework.exceptions import APIException, ValidationError
@@ -129,11 +130,65 @@ def needs_content(chapter):
     return is_placeholder(chapter.content) or any(is_placeholder(s.content) for s in chapter.children.all())
 
 
+def _normalized(title):
+    """« Dédicace » → « dedicace » : comparaison sans accents ni majuscules."""
+    return unicodedata.normalize('NFKD', title or '').encode('ascii', 'ignore').decode().lower()
+
+
+def page_kind(chapter):
+    """Pages traitées à part : « personal » (jamais rédigées par l'IA), « abstract » ou « acronyms »
+    (rédigées à partir du texte déjà écrit). None pour un chapitre ordinaire."""
+    title = _normalized(chapter.title)
+    if 'dedicace' in title or 'remerciement' in title:
+        return 'personal'
+    if chapter.type == 'preliminary':
+        if 'resume' in title or 'abstract' in title:
+            return 'abstract'
+        if 'sigle' in title or 'abreviation' in title:
+            return 'acronyms'
+    return None
+
+
+def written_text(project):
+    """Texte déjà rédigé du mémoire (chapitres et sections, dans l'ordre), avec les titres."""
+    parts = []
+    for chapter in generable_chapters(project):
+        for block in [chapter, *chapter.children.order_by('order', 'id')]:
+            if not is_placeholder(block.content):
+                parts.append(f"{block.title}\n{block.content.strip()}")
+    return '\n\n'.join(parts)
+
+
+def write_special_page(project, chapter, kind):
+    """Résumé (+ Abstract) ou liste des sigles, établis à partir des chapitres déjà rédigés."""
+    if not is_placeholder(chapter.content):
+        raise ValidationError({'error': 'Cette page est déjà rédigée.'})
+    text = written_text(project)
+    if len(text) < 300:
+        raise ValidationError({'error': "Rédigez d'abord les chapitres : cette page est établie à partir de votre texte."})
+    if kind == 'abstract':
+        content = AIService.write_abstract(project_context(project), text[:15000], project.language or 'fr')
+    else:
+        content = AIService.list_acronyms(text[:20000]) or 'Aucun sigle ni abréviation relevé dans le texte actuel.'
+    if not content.strip():
+        raise ValidationError({'error': "L'IA n'a produit aucun contenu exploitable. Réessayez."})
+    chapter.content = content
+    chapter.version += 1
+    chapter.save(update_fields=['content', 'version', 'updated_at'])
+    return 1
+
+
 def write_chapter_content(project, chapter):
-    """Rédige l'introduction et les sections encore vides d'un chapitre. Renvoie le nombre de blocs écrits."""
+    """Rédige l'introduction et les sections encore vides d'un chapitre. Renvoie le nombre de blocs écrits.
+    Résumé et sigles : rédigés à partir du texte existant. Dédicace et remerciements : jamais."""
     require_paid_template(project)
     if chapter.parent_id is not None:
         raise ValidationError({'error': 'Lancez la rédaction depuis le chapitre parent.'})
+    kind = page_kind(chapter)
+    if kind == 'personal':
+        raise ValidationError({'error': 'La dédicace et les remerciements sont personnels : rédigez-les vous-même.'})
+    if kind in ('abstract', 'acronyms'):
+        return write_special_page(project, chapter, kind)
     if chapter.type in NON_GENERATED_TYPES:
         raise ValidationError({'error': 'Cette page (dédicace, remerciements, résumé, bibliographie, annexes) '
                                         'doit être rédigée par vous.'})

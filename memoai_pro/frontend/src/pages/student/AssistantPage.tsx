@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Check, Copy, Info, Sparkles } from 'lucide-react';
 
 import { describeError } from '../../api/client';
 import { aiApi, projectsApi } from '../../api/services';
+import AiText, { stripMarkdown } from '../../components/AiText';
 import Layout from '../../components/Layout';
 import type { Project } from '../../lib/models';
 import '../../styles/workspace.css';
@@ -58,7 +60,7 @@ export default function AssistantPage() {
   };
 
   const copy = async () => {
-    try { await navigator.clipboard.writeText(result); setCopied(true); } catch { /* ignore */ }
+    try { await navigator.clipboard.writeText(stripMarkdown(result)); setCopied(true); } catch { /* ignore */ }
   };
 
   return (
@@ -114,7 +116,7 @@ export default function AssistantPage() {
                 </select>
               )}
               <button className="btn primary" disabled={loading || !input.trim()} onClick={run}>
-                {loading ? 'Génération...' : 'Lancer ✦'}
+                {loading ? 'Génération…' : <><Sparkles size={15} /> Lancer</>}
               </button>
               <span className="muted" style={{ fontSize: 12 }}>Ctrl+Entrée</span>
             </div>
@@ -124,13 +126,16 @@ export default function AssistantPage() {
 
           {result && (
             <section className="panel">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>Résultat</h3>
-                <button className="btn" onClick={copy}>{copied ? '✓ Copié' : '📋 Copier'}</button>
+              <div className="ai-result-head">
+                <h3>Réponse de l'assistant</h3>
+                <button className="btn" onClick={copy}>
+                  {copied ? <><Check size={15} /> Copié</> : <><Copy size={15} /> Copier</>}
+                </button>
               </div>
-              <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.7, color: 'var(--text-secondary)', marginTop: 12 }}>{result}</div>
-              <p className="note" style={{ marginTop: 14 }}>
-                ⚠ Contenu généré par IA : vérifiez les faits et les références avant de les intégrer à votre mémoire.
+              <AiText text={result} />
+              <p className="ai-disclaimer">
+                <Info size={14} aria-hidden="true" />
+                Contenu généré par l'IA : vérifiez les faits et les références avant de les intégrer à votre mémoire.
               </p>
             </section>
           )}

@@ -325,8 +325,85 @@ class GenerationAccessTests(APITestCase):
         prompt = self.create.call_args.kwargs['messages'][1]['content']
         self.assertIn('Revue empirique', prompt)  # titre de section du modèle transmis à l'IA
 
+    def test_dedication_and_acknowledgements_are_never_written(self):
+        from projects.models import Chapter
+        self.buy_and_apply()
+        for title in ('Dédicace', 'Remerciements'):
+            page = Chapter.objects.get(project=self.project, title=title)
+            res = self.client.post(f'/projects/chapters/{page.id}/generate_content/')
+            self.assertEqual(res.status_code, 400)
+            self.assertIn('personnels', res.data['error'])
+        self.create.assert_not_called()
+
+    def test_abstract_and_acronyms_written_from_existing_text(self):
+        from projects.models import Chapter
+        self.buy_and_apply()
+        Chapter.objects.filter(project=self.project, title__startswith='Chapitre 1', parent=None).update(
+            content="Le mobile money, proposé par l'ARTP et la BCEAO, transforme l'inclusion financière. " * 10)
+        resume = Chapter.objects.get(project=self.project, title='Résumé')
+        sigles = Chapter.objects.get(project=self.project, title='Sigles et abréviations')
+
+        self.create.return_value = fake_chat_completion(
+            '**Résumé** : cette étude analyse le mobile money.\n\nMots-clés : mobile money, inclusion\n\n'
+            'Abstract\nThis study analyses mobile money.\n\nKeywords: mobile money')
+        res = self.client.post(f'/projects/chapters/{resume.id}/generate_content/')
+        self.assertEqual(res.status_code, 200, res.data)
+        resume.refresh_from_db()
+        self.assertTrue(resume.content.startswith('Résumé : cette étude'))  # sans astérisques
+        self.assertIn('Abstract', resume.content)
+        self.assertIn('mobile money', self.create.call_args.kwargs['messages'][1]['content'])  # texte réel transmis
+
+        self.create.return_value = fake_chat_completion('ARTP : Autorité de régulation\nBCEAO : Banque centrale')
+        res = self.client.post(f'/projects/chapters/{sigles.id}/generate_content/')
+        self.assertEqual(res.status_code, 200, res.data)
+        sigles.refresh_from_db()
+        self.assertIn('BCEAO : Banque centrale', sigles.content)
+
+    def test_abstract_needs_written_chapters_first(self):
+        from projects.models import Chapter
+        self.buy_and_apply()
+        resume = Chapter.objects.get(project=self.project, title='Résumé')
+        res = self.client.post(f'/projects/chapters/{resume.id}/generate_content/')
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("Rédigez d'abord les chapitres", res.data['error'])
+        self.create.assert_not_called()
+
     def test_preliminary_pages_are_not_generated(self):
         from projects.models import Chapter
         self.buy_and_apply()
         dedicace = Chapter.objects.get(project=self.project, title='Dédicace')
         self.assertEqual(self.client.post(f'/projects/chapters/{dedicace.id}/generate_content/').status_code, 400)
+
+
+EXEMPLE_MARKDOWN = (
+    "Je suis votre assistant académique. Je peux vous accompagner :\n\n"
+    "- **Structurer votre travail** : plan, problématique\n"
+    "- **Citations et références** : normes APA, etc. *(références à vérifier vous-même)*\n\n"
+    "## Méthode\n1. **Introduction** générale [source à compléter]\n"
+)
+
+
+class CleanAITextTests(APITestCase):
+    """Les réponses de l'IA ne doivent contenir aucun symbole Markdown (astérisques, dièses...)."""
+
+    def test_markdown_removed_but_content_kept(self):
+        out = services.clean_ai_text(EXEMPLE_MARKDOWN)
+        for symbol in ('**', '*(', '## ', '- '):
+            self.assertNotIn(symbol, out)
+        self.assertIn('• Structurer votre travail : plan, problématique', out)
+        self.assertIn('(références à vérifier vous-même)', out)
+        self.assertIn('1. Introduction générale [source à compléter]', out)
+
+    def test_ordinary_symbols_untouched(self):
+        self.assertEqual(services.clean_ai_text('mon_fichier_final et 2*3 = 6'), 'mon_fichier_final et 2*3 = 6')
+
+    @override_settings(AI_PROVIDER='openrouter', OPENAI_API_KEY='test-key', AI_MODEL='a/m', AI_FALLBACK_MODELS=[])
+    def test_chat_answer_is_cleaned(self):
+        services._openrouter_client.cache_clear()
+        user = User.objects.create_user('propre@test.com', 'Motdepasse-Solide-2026', first_name='A', last_name='B')
+        self.client.force_authenticate(user)
+        with mock.patch.object(services, '_openrouter_client') as client:
+            client.return_value.chat.completions.create.return_value = fake_chat_completion(EXEMPLE_MARKDOWN)
+            res = self.client.post('/ai/chat/', {'message': 'Que sais-tu faire ?'})
+        self.assertNotIn('**', res.data['response'])
+        self.assertNotIn('##', res.data['response'])

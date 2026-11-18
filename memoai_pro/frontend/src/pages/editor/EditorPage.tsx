@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
-import { describeError } from '../../api/client';
+import { ApiError, describeError } from '../../api/client';
 import { chaptersApi, projectsApi } from '../../api/services';
 import Layout from '../../components/Layout';
 import { useToast } from '../../context/ToastContext';
@@ -20,6 +20,26 @@ import '../../styles/editor.css';
 type ModalName = 'export' | 'references' | 'collaboration' | 'comments' | 'settings' | 'verify' | 'cover' | null;
 
 const CHAPTER_STATUS: Record<string, string> = { draft: 'Brouillon', review: 'En révision', validated: 'Validé' };
+
+// Contenu « vide » : rien, ou seulement les conseils du modèle (même règle que le serveur).
+const PLACEHOLDER = /^\s*(\[(Conseil du modèle|Sous-parties prévues)[^\]]*\]\s*)*$/;
+const isPlaceholder = (content: string | null) => !content || PLACEHOLDER.test(content);
+const normalize = (title: string) => title.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const isPersonalPage = (c: Chapter) => /dedicace|remerciement/.test(normalize(c.title));
+const isTextBasedPage = (c: Chapter) => c.type === 'preliminary' && /resume|abstract|sigle|abreviation/.test(normalize(c.title));
+
+/** Parties que l'IA peut rédiger, dans l'ordre : les chapitres d'abord, puis le résumé et les sigles
+ *  (établis à partir du texte des chapitres). Jamais la dédicace ni les remerciements. */
+export function aiWritingQueue(chapters: Chapter[]): Chapter[] {
+  const top = chapters.filter(c => c.parent === null).sort((a, b) => a.order - b.order || a.id - b.id);
+  const sections = (id: number) => chapters.filter(c => c.parent === id);
+  const body = top.filter(c => !isPersonalPage(c) && c.type !== 'preliminary' && c.type !== 'back'
+    && (isPlaceholder(c.content) || sections(c.id).some(s => isPlaceholder(s.content))));
+  const pages = top.filter(c => !isPersonalPage(c) && isTextBasedPage(c) && isPlaceholder(c.content));
+  return [...body, ...pages];
+}
+
+interface AiRun { done: number; total: number; current: string }
 
 /** Chapitres de premier niveau suivis de leurs sections, dans l'ordre. */
 function outline(chapters: Chapter[]): { chapter: Chapter; depth: number; number: string }[] {
@@ -57,12 +77,20 @@ export default function EditorPage() {
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [modal, setModal] = useState<ModalName>(null);
+  const [aiRun, setAiRun] = useState<AiRun | null>(null);
+  const stopAi = useRef(false);
   const pollTimer = useRef<number>();
 
   const selected = chapters.find(c => c.id === selectedId) ?? null;
   const dirty = !!selected && (draft.title !== selected.title || draft.content !== (selected.content ?? ''));
   const tree = useMemo(() => outline(chapters), [chapters]);
   const topLevelCount = chapters.filter(c => c.parent === null).length;
+  const aiQueue = useMemo(() => aiWritingQueue(chapters), [chapters]);
+  // Lus pendant la rédaction IA (boucle asynchrone) : valeurs à jour sans relancer la boucle.
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
+  const selectedIdRef = useRef<number | null>(null);
+  selectedIdRef.current = selectedId;
 
   const load = useCallback(async () => {
     if (!projectId) return;
@@ -226,6 +254,50 @@ export default function EditorPage() {
   };
 
   const canGeneratePlan = project?.status === 'DRAFT';
+  const canWriteWithAi = !!project && !['REVIEW', 'VALIDATED'].includes(project.status) && aiQueue.length > 0;
+
+  /** Rédige tout le plan avec l'IA, partie par partie (une requête courte par partie). */
+  const writeWithAi = async () => {
+    if (!project || aiRun) return;
+    if (dirty) {
+      toast.warning("Enregistrez d'abord", 'Sauvegardez le chapitre en cours avant de lancer la rédaction.');
+      return;
+    }
+    const queue = aiWritingQueue(chapters);
+    if (!queue.length) return;
+    if (!window.confirm(
+      `L'IA va rédiger ${queue.length} partie(s) de votre mémoire, l'une après l'autre (environ une minute chacune).\n\n`
+      + 'La dédicace et les remerciements ne sont pas rédigés, et le texte que vous avez déjà écrit '
+      + "n'est jamais remplacé.\n\nContinuer ?",
+    )) return;
+
+    stopAi.current = false;
+    let written = 0;
+    const failed: string[] = [];
+    for (let i = 0; i < queue.length && !stopAi.current; i++) {
+      const part = queue[i];
+      setAiRun({ done: i, total: queue.length, current: part.title });
+      try {
+        const res = await chaptersApi.generateContent(part.id);
+        written += 1;
+        setChapters(res.chapters);
+        const shown = res.chapters.find(c => c.id === selectedIdRef.current);
+        if (shown && !dirtyRef.current) setDraft({ title: shown.title, content: shown.content ?? '' });
+      } catch (err) {
+        const status = err instanceof ApiError ? err.status : 0;
+        failed.push(`${part.title} : ${describeError(err, 'Rédaction impossible.')}`);
+        // Serveur injoignable, modèle non acheté, IA saturée ou indisponible : inutile de continuer.
+        if ([0, 402, 429, 503].includes(status)) break;
+      }
+    }
+    const stopped = stopAi.current;
+    setAiRun(null);
+    if (written) {
+      toast.success('Rédaction terminée', `${written} partie(s) rédigée(s). Relisez et complétez les mentions [source à compléter].`);
+    }
+    if (failed.length) toast.error("Certaines parties n'ont pas été rédigées", failed.join(' · '));
+    else if (stopped) toast.info('Rédaction arrêtée', 'Vous pourrez relancer la rédaction des parties restantes.');
+  };
 
   return (
     <Layout>
@@ -253,11 +325,33 @@ export default function EditorPage() {
                 <button type="button" className="secondary" onClick={() => setModal('references')}>📚 Bibliographie</button>
                 <button type="button" className="secondary" onClick={() => setModal('export')}>📥 Exporter</button>
                 {canGeneratePlan && (
-                  <button type="button" className="primary" disabled={generating} onClick={generatePlan}>
+                  <button type="button" className="primary" disabled={generating || !!aiRun} onClick={generatePlan}>
                     {generating ? 'Génération…' : '✦ Générer le plan avec IA'}
                   </button>
                 )}
+                {canWriteWithAi && (
+                  <button type="button" className="primary" disabled={!!aiRun || generating} onClick={writeWithAi}
+                          title="Rédige le contenu de tout le plan, sauf la dédicace et les remerciements">
+                    {aiRun ? 'Rédaction en cours…' : "✦ Rédiger le mémoire avec l'IA"}
+                  </button>
+                )}
               </div>
+            </div>
+          )}
+
+          {aiRun && (
+            <div className="ai-progress" role="status" aria-live="polite">
+              <div className="ai-progress-head">
+                <strong>Rédaction par l'IA : partie {aiRun.done + 1} sur {aiRun.total}</strong>
+                <button type="button" className="secondary" onClick={() => { stopAi.current = true; }}>
+                  Arrêter après cette partie
+                </button>
+              </div>
+              <p>En cours : « {aiRun.current} »</p>
+              <div className="ai-progress-bar" aria-hidden="true">
+                <i style={{ width: `${Math.max(4, (aiRun.done / aiRun.total) * 100)}%` }} />
+              </div>
+              <small>Gardez cette page ouverte. La dédicace, les remerciements et votre propre texte ne sont pas modifiés.</small>
             </div>
           )}
 
