@@ -39,9 +39,9 @@ export default function ProjectsPage() {
   const fail = (err: unknown, fallback: string) => toast.error('Action impossible', describeError(err, fallback));
 
   const remove = (p: Project) => {
-    if (!window.confirm(`Supprimer définitivement « ${p.title} » et tous ses chapitres ?`)) return;
+    if (!window.confirm(`Placer « ${p.title} » dans la corbeille ? Vous pourrez le restaurer pendant 30 jours.`)) return;
     projectsApi.remove(p.id)
-      .then(() => { setProjects(list => list.filter(x => x.id !== p.id)); toast.success('Mémoire supprimé'); })
+      .then(() => { setProjects(list => list.filter(x => x.id !== p.id)); toast.success('Mémoire placé dans la corbeille', 'Restaurable depuis le menu « Corbeille ».'); })
       .catch(err => fail(err, 'Impossible de supprimer le mémoire.'));
   };
 

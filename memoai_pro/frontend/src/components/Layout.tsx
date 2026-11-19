@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
   Bell, BookOpen, FilePlus2, LayoutDashboard, LayoutTemplate, LogOut, Menu, Moon, Scale, ShieldCheck, Sparkles, Sun,
-  UserRound, Users, X, type LucideIcon,
+  Trash2, UserRound, Users, X, type LucideIcon,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +25,7 @@ const NAV: Record<string, NavItem[]> = {
     { path: '/projects/new', icon: FilePlus2, label: 'Nouveau mémoire', short: 'Nouveau' },
     { path: '/modeles', icon: LayoutTemplate, label: 'Modèles de mémoire', short: 'Modèles' },
     { path: '/assistant', icon: Sparkles, label: 'Assistant IA', short: 'Assistant' },
+    { path: '/corbeille', icon: Trash2, label: 'Corbeille', short: 'Corbeille' },
   ],
   SUPERVISOR: [{ path: '/supervision', icon: Users, label: 'Mémoires encadrés', short: 'Encadrés' }],
   CO_SUPERVISOR: [{ path: '/supervision', icon: Users, label: 'Mémoires co-encadrés', short: 'Co-encadrés' }],

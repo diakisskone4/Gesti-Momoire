@@ -9,7 +9,7 @@ export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000')
 
 const ACCESS_KEY = 'memoai_access';
 const REFRESH_KEY = 'memoai_refresh';
-const PUBLIC_PATHS = ['/users/login/', '/users/register/', '/users/refresh/'];
+const PUBLIC_PATHS = ['/users/login/', '/users/register/', '/users/refresh/', '/users/password-reset/'];
 
 function storageGet(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }

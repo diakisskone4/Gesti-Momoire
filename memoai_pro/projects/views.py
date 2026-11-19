@@ -13,6 +13,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
+from .trash import move_to_trash
 from .access import get_owned_project, is_reviewer, readable_project_q
 from .models import Chapter, Folder, Project, Reference
 from .serializers import ChapterSerializer, FolderSerializer, ProjectSerializer, ReferenceSerializer
@@ -94,7 +95,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         if instance.user_id != self.request.user.id and self.request.user.role != 'ADMIN':
             raise PermissionDenied("Seul l'auteur du mémoire peut le supprimer.")
-        instance.delete()
+        move_to_trash(instance)  # restaurable depuis la corbeille pendant 30 jours
 
     # ---------------------------------------------------------- cycle de vie
 
@@ -288,6 +289,7 @@ class ChapterViewSet(viewsets.ModelViewSet):
     """Lecture : l'auteur, ses encadreurs et son jury. Écriture : l'auteur seul."""
     serializer_class = ChapterSerializer
     permission_classes = [permissions.IsAuthenticated]
+    throttle_scope = None  # « ai » pour la rédaction automatique (voir generate_content)
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):  # génération du schéma Swagger
@@ -322,9 +324,9 @@ class ChapterViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         self._require_owner(instance)
-        instance.delete()
+        move_to_trash(instance)  # restaurable depuis la corbeille pendant 30 jours
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_scope='ai')
     def generate_content(self, request, pk=None):
         """Rédige par IA l'introduction et les sections vides d'un chapitre (modèle acheté requis)."""
         chapter = self.get_object()
@@ -401,7 +403,7 @@ class ReferenceViewSet(viewsets.ModelViewSet):
 
     def perform_destroy(self, instance):
         self._require_owner(instance.project)
-        instance.delete()
+        move_to_trash(instance)  # restaurable depuis la corbeille pendant 30 jours
 
     @action(detail=True, methods=['get'])
     def bibtex(self, request, pk=None):

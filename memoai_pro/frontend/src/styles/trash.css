@@ -1,0 +1,42 @@
+/* Page Corbeille (couleurs de l'application : vert #0f766e, rouge des erreurs) */
+.scope-trash .btn-danger-outline {
+  display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 10px;
+  border: 1px solid var(--error-text); background: transparent; color: var(--error-text);
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.scope-trash .btn-danger-outline:hover:not(:disabled) { background: var(--error); }
+.scope-trash .btn-danger-outline:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.scope-trash .trash-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 18px; }
+.scope-trash .trash-filters button {
+  border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-secondary);
+  padding: 7px 14px; border-radius: 999px; font: inherit; font-size: 13px; cursor: pointer;
+}
+.scope-trash .trash-filters button.active { background: #0f766e; border-color: #0f766e; color: #fff; }
+
+.scope-trash .empty-state svg { color: var(--text-muted); margin-bottom: 10px; }
+
+.scope-trash .trash-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.scope-trash .trash-item {
+  display: flex; align-items: center; gap: 14px; padding: 14px 16px;
+  background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 14px;
+}
+.scope-trash .trash-icon {
+  flex: none; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 118, 110, 0.1); color: #0f766e;
+}
+.scope-trash .trash-icon.kind-chapter { background: rgba(37, 99, 235, 0.1); color: #2563eb; }
+.scope-trash .trash-icon.kind-reference { background: rgba(124, 58, 237, 0.1); color: #7c3aed; }
+.scope-trash .trash-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.scope-trash .trash-info strong { color: var(--text-primary); overflow-wrap: anywhere; }
+.scope-trash .trash-meta { font-size: 12.5px; color: var(--text-muted); }
+.scope-trash .trash-soon { color: var(--error-text); font-weight: 600; }
+.scope-trash .trash-actions { display: flex; gap: 8px; flex: none; }
+.scope-trash .trash-actions .btn-small { display: inline-flex; align-items: center; gap: 5px; }
+.scope-trash .btn-small.danger { color: var(--error-text); border-color: var(--error-text); }
+.scope-trash .btn-small.danger:hover:not(:disabled) { background: var(--error); }
+
+@media (max-width: 640px) {
+  .scope-trash .trash-item { flex-wrap: wrap; }
+  .scope-trash .trash-actions { width: 100%; justify-content: flex-end; }
+}

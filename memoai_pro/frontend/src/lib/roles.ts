@@ -44,6 +44,8 @@ export const REVIEWER_ROLES: RoleCode[] = ['SUPERVISOR', 'CO_SUPERVISOR', 'JURY'
  *  étudiant /login, encadreur /encadreur/login, co-encadreur /co-encadreur/login, jury /jury/login, admin /admin/login. */
 export const loginPath = (role: RoleDef) => (role.code === 'STUDENT' ? '/login' : `/${role.slug}/login`);
 export const registerPath = (role: RoleDef) => (role.code === 'STUDENT' ? '/register' : `/${role.slug}/register`);
+export const forgotPath = (role: RoleDef) =>
+  (role.code === 'STUDENT' ? '/mot-de-passe-oublie' : `/${role.slug}/mot-de-passe-oublie`);
 export const roleBySlug = (slug?: string | null) => ROLES.find(r => r.slug === slug);
 export const roleByCode = (code?: string | null) => ROLES.find(r => r.code === code);
 export const homeFor = (code?: string | null) => roleByCode(code)?.home ?? '/login';

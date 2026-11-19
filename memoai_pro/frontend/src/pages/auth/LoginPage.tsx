@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { ApiError, describeError } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
-import { homeFor, loginPath, registerPath, roleByCode, type RoleCode, type RoleDef } from '../../lib/roles';
+import { forgotPath, homeFor, loginPath, registerPath, roleByCode, type RoleCode, type RoleDef } from '../../lib/roles';
 import AuthShell, { AuthTabs, SpaceBadge } from './AuthShell';
 
 /** Connexion d'un espace : /login (étudiant), /encadreur/login, /co-encadreur/login, /jury/login, /admin/login.
@@ -65,6 +65,10 @@ export default function LoginPage({ roleCode = 'STUDENT' }: { roleCode?: RoleCod
             {showPassword ? 'Masquer' : 'Afficher'}
           </button>
         </label>
+
+        <div className="forgot-row">
+          <Link className="forgot-link" to={forgotPath(role)}>Mot de passe oublié ?</Link>
+        </div>
 
         {error && (
           <div className="error" role="alert">

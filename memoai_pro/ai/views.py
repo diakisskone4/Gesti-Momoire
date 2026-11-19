@@ -24,6 +24,7 @@ def call_ai(fn, *args):
 
 class AIChatView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'ai'
     def post(self, request):
         message = request.data.get('message')
         project_id = request.data.get('project_id')
@@ -36,6 +37,7 @@ class AIChatView(APIView):
 
 class AIGeneratePlanView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'ai'
     def post(self, request):
         project_id = request.data.get('project_id')
         try:
@@ -69,6 +71,7 @@ def ai_task_payload(ai_task):
 
 class AIVerificationView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'ai'
     def post(self, request):
         content = request.data.get('content')
         if not content:
@@ -80,6 +83,7 @@ class AIVerificationView(APIView):
 
 class AIReformulationView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'ai'
     def post(self, request):
         text = request.data.get('text')
         style = request.data.get('style', 'academic')
@@ -92,6 +96,7 @@ class AIReformulationView(APIView):
 
 class AISummaryView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'ai'
     def post(self, request):
         text = request.data.get('text')
         if not text:
@@ -103,6 +108,7 @@ class AISummaryView(APIView):
 
 class AITranslationView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'ai'
     def post(self, request):
         text = request.data.get('text')
         target_lang = request.data.get('target_lang', 'en')
@@ -115,6 +121,7 @@ class AITranslationView(APIView):
 
 class AIGenerateDiagramView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'ai'
     def post(self, request):
         diagram_type = request.data.get('type', 'uml')  # uml, bpmn, flowchart
         description = request.data.get('description')
@@ -125,6 +132,7 @@ class AIGenerateDiagramView(APIView):
 
 class AIGenerateChartView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'ai'
     def post(self, request):
         chart_type = request.data.get('type', 'bar')
         data = request.data.get('data')

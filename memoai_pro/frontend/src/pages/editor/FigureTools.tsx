@@ -36,6 +36,7 @@ export function removeFigure(content: string, id: number): string {
 }
 
 const MAX_SIDE = 1600;
+const MAX_DATA_URL = 3_500_000; // caractères base64 (~2,6 Mo d'image)
 
 /** Réduit l'image à 1600 px côté navigateur (envoi léger, compatible avec la limite de Vercel). */
 async function resizeToDataUrl(file: File): Promise<string> {
@@ -52,14 +53,16 @@ async function resizeToDataUrl(file: File): Promise<string> {
     img.src = source;
   });
   const scale = Math.min(1, MAX_SIDE / Math.max(image.width, image.height));
-  if (scale === 1 && file.size < 2_500_000) return source;
+  if (scale === 1 && source.length < MAX_DATA_URL) return source;
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(image.width * scale);
   canvas.height = Math.round(image.height * scale);
   const ctx = canvas.getContext('2d');
   if (!ctx) return source;
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return file.type === 'image/png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.88);
+  const png = file.type === 'image/png' ? canvas.toDataURL('image/png') : '';
+  // Envoi limité à environ 4 Mo : un PNG trop lourd (photo) est converti en JPEG.
+  return png && png.length < MAX_DATA_URL ? png : canvas.toDataURL('image/jpeg', 0.85);
 }
 
 const urlCache = new Map<number, Promise<string>>();

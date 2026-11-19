@@ -234,8 +234,8 @@ export default function EditorPage() {
     if (!selected) return;
     const children = chapters.filter(c => c.parent === selected.id).length;
     const msg = children
-      ? `Supprimer « ${selected.title} » et ses ${children} section(s) ? Cette action est irréversible.`
-      : `Supprimer « ${selected.title} » ? Cette action est irréversible.`;
+      ? `Placer « ${selected.title} » et ses ${children} section(s) dans la corbeille ? Restaurable pendant 30 jours.`
+      : `Placer « ${selected.title} » dans la corbeille ? Restaurable pendant 30 jours.`;
     if (!window.confirm(msg)) return;
     try {
       await chaptersApi.remove(selected.id);
@@ -248,7 +248,7 @@ export default function EditorPage() {
       const remaining = chapters.filter(c => !removed.has(c.id));
       setChapters(remaining);
       setSelectedId(outline(remaining)[0]?.chapter.id ?? null);
-      toast.success('Chapitre supprimé');
+      toast.success('Chapitre placé dans la corbeille', 'Restaurable depuis le menu « Corbeille ».');
     } catch (err) {
       toast.error('Suppression impossible', describeError(err));
     }

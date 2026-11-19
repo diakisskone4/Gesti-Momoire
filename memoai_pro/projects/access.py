@@ -19,9 +19,10 @@ def visible_projects(user):
 
 def readable_project_q(user, prefix='project__'):
     """Filtre Q sur un modèle lié à Project (chapitres, références, commentaires...)."""
+    active = Q(**{f'{prefix}deleted_at__isnull': True})  # mémoire hors corbeille
     if user.role == 'ADMIN':
-        return Q()
-    return (
+        return active
+    return active & (
         Q(**{f'{prefix}user': user}) | Q(**{f'{prefix}supervisor': user})
         | Q(**{f'{prefix}co_supervisor': user}) | Q(**{f'{prefix}jury': user})
     )

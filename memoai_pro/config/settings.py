@@ -112,6 +112,7 @@ MIDDLEWARE = [
     'users.middleware.ActivityLogMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'config.security.SecurityHeadersMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -136,13 +137,68 @@ TEMPLATES = [
 
 # ---------------------------------------------------------------- API & authentification
 
+TESTING = len(sys.argv) > 1 and sys.argv[1] == 'test'
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
+    # Fermé par défaut : une vue publique doit le déclarer explicitement (AllowAny).
+    'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),
+    # Pas d'interface « navigable » de DRF en production (elle expose la structure de l'API).
+    'DEFAULT_RENDERER_CLASSES': (
+        ('rest_framework.renderers.JSONRenderer', 'rest_framework.renderers.BrowsableAPIRenderer')
+        if DEBUG else ('rest_framework.renderers.JSONRenderer',)
+    ),
+    # Limitation du nombre de requêtes (force brute, robots, abus de l'IA).
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.environ.get('THROTTLE_ANON', '60/min'),
+        'user': os.environ.get('THROTTLE_USER', '600/min'),
+        'login': os.environ.get('THROTTLE_LOGIN', '10/min'),        # par adresse IP
+        'register': os.environ.get('THROTTLE_REGISTER', '5/hour'),
+        'refresh': '30/min',
+        'two_factor': '10/hour',
+        'password': '10/hour',
+        'password_reset': '5/hour',          # demandes d'email par adresse IP
+        'password_reset_confirm': '20/hour',
+        'shared': '30/min',
+        'ai': os.environ.get('THROTTLE_AI', '150/hour'),  # « Rédiger le mémoire » : un appel par chapitre
+        'upload': '60/hour',
+    },
+    # Vercel : l'adresse réelle du visiteur est la première de X-Forwarded-For.
+    'NUM_PROXIES': 1 if ON_VERCEL else None,
+}
+if TESTING:  # les tests de limitation fixent leurs propres seuils
+    REST_FRAMEWORK['DEFAULT_THROTTLE_RATES'] = {k: '10000/min' for k in REST_FRAMEWORK['DEFAULT_THROTTLE_RATES']}
+
+# Verrouillage d'un compte après trop d'échecs de connexion (quelle que soit l'adresse IP).
+LOGIN_MAX_FAILURES = int(os.environ.get('LOGIN_MAX_FAILURES', '8'))
+LOGIN_LOCKOUT_MINUTES = int(os.environ.get('LOGIN_LOCKOUT_MINUTES', '15'))
+
+# Compteurs (limitation, verrouillage) partagés entre toutes les instances Vercel : stockés en base.
+# Table créée par « python manage.py createcachetable ».
+CACHES = {
+    'default': (
+        {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'} if TESTING or not os.environ.get('DATABASE_URL')
+        else {'BACKEND': 'django.core.cache.backends.db.DatabaseCache', 'LOCATION': 'memoai_cache'}
+    ),
 }
 
+# Connexion Google : désactivée tant que l'identifiant client OAuth n'est pas défini.
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+
+# Chemin de l'administration Django : à personnaliser (ex. ADMIN_URL=gestion-7f3k/) pour la cacher des robots.
+ADMIN_URL = os.environ.get('ADMIN_URL', 'admin/').strip('/') + '/'
+# Documentation Swagger / ReDoc : uniquement en développement, sauf ENABLE_API_DOCS=1.
+ENABLE_API_DOCS = env_bool('ENABLE_API_DOCS', DEBUG)
+
 AUTH_USER_MODEL = 'users.User'
+AUTHENTICATION_BACKENDS = ['users.security.LockoutModelBackend']
 
 # Jetons JWT : le frontend renouvelle l'accès automatiquement avec le jeton de
 # rafraîchissement, qui change à chaque renouvellement (l'ancien est blacklisté).
@@ -275,6 +331,10 @@ EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '25'))
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', False)
+EMAIL_USE_SSL = env_bool('EMAIL_USE_SSL', False)
+EMAIL_TIMEOUT = 15
+# Lien « mot de passe oublié » : valable 1 heure.
+PASSWORD_RESET_TIMEOUT = int(os.environ.get('PASSWORD_RESET_TIMEOUT', '3600'))
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'MemoAI Pro <no-reply@memoai.local>')
 
 
@@ -282,13 +342,13 @@ DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'MemoAI Pro <no-reply@
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator', 'OPTIONS': {'min_length': 8}},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
 # Tests uniquement : hachage rapide des mots de passe (le PBKDF2 réel rend la suite très lente).
-if len(sys.argv) > 1 and sys.argv[1] == 'test':
+if TESTING:
     PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
 
 
@@ -312,6 +372,10 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Taille maximale d'une requête (images des figures en base64) : Vercel refuse au-delà de 4,5 Mo.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 2000
+
 # ---------------------------------------------------------------- production (HTTPS)
 
 if not DEBUG:
@@ -320,7 +384,18 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
-    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '0'))
+    SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', True)
+    # HTTPS obligatoire pour les navigateurs pendant un an.
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', False)
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_AGE = 60 * 60 * 8  # administration Django : session de 8 heures
+
+SECURE_REFERRER_POLICY = 'same-origin'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
+X_FRAME_OPTIONS = 'DENY'
 
 LOGGING = {
     'version': 1,

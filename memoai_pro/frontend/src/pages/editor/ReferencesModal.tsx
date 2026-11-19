@@ -53,7 +53,7 @@ export default function ReferencesModal({ projectId, onClose }: { projectId: num
   };
 
   const remove = async (ref: Reference) => {
-    if (!window.confirm(`Supprimer « ${ref.title} » ?`)) return;
+    if (!window.confirm(`Placer « ${ref.title} » dans la corbeille ? Restaurable pendant 30 jours.`)) return;
     try {
       await referencesApi.remove(ref.id);
       setRefs(list => (list ?? []).filter(r => r.id !== ref.id));

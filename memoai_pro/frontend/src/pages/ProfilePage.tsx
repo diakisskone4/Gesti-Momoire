@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 
-import { describeError } from '../api/client';
+import { describeError, tokens } from '../api/client';
 import { authApi } from '../api/services';
 import Layout from '../components/Layout';
 import Modal from '../components/Modal';
@@ -211,8 +211,10 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
     setSaving(true);
     setError('');
     try {
-      await authApi.changePassword(oldPassword, newPassword);
-      toast.success('Mot de passe modifié');
+      const result = await authApi.changePassword(oldPassword, newPassword);
+      // Les autres appareils sont déconnectés ; cette session reçoit de nouveaux jetons.
+      if (result.access) tokens.save(result.access, result.refresh);
+      toast.success('Mot de passe modifié', 'Vos autres appareils ont été déconnectés.');
       onClose();
     } catch (err) {
       setError(describeError(err, 'Modification impossible.'));

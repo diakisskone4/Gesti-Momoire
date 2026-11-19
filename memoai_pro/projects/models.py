@@ -3,6 +3,14 @@ from django.contrib.auth import get_user_model
 
 User = get_user_model()
 
+
+class ActiveManager(models.Manager):
+    """Gestionnaire par défaut : masque les éléments placés dans la corbeille."""
+
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
+
 class Project(models.Model):
     LEVEL_CHOICES = [
         ('LICENCE', 'Licence'),
@@ -72,7 +80,11 @@ class Project(models.Model):
     review_comment = models.TextField(blank=True)
     
     export_allowed = models.BooleanField(default=True)
-    
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)  # dans la corbeille
+
+    objects = ActiveManager()
+    all_objects = models.Manager()  # y compris la corbeille
+
     def __str__(self):
         return self.title
 
@@ -96,9 +108,14 @@ class Chapter(models.Model):
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)  # dans la corbeille
+
+    objects = ActiveManager()
+    all_objects = models.Manager()
+
     class Meta:
         ordering = ['order']
+        base_manager_name = 'all_objects'
     
     def __str__(self):
         return f"{self.title} (Projet: {self.project.title})"
@@ -132,7 +149,11 @@ class Reference(models.Model):
     
     # ✅ CORRECTION: Utiliser uniquement auto_now_add=True, pas de default
     created_at = models.DateTimeField(auto_now_add=True)
-    
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)  # dans la corbeille
+
+    objects = ActiveManager()
+    all_objects = models.Manager()
+
     def __str__(self):
         return self.title
 

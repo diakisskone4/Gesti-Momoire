@@ -53,10 +53,20 @@ describe('routes', () => {
   ])("la page %s ne montre aucun lien vers l'espace d'un autre rôle", async (path, sibling) => {
     renderAt(path);
     await screen.findByRole('navigation', { name: 'Connexion ou inscription' });
-    const own = new Set([path, sibling]);
+    // Seul autre lien permis : « Mot de passe oublié ? » du même espace.
+    const forgot = path === '/login' ? '/mot-de-passe-oublie' : path.replace(/login$/, 'mot-de-passe-oublie');
+    const own = new Set([path, sibling, forgot]);
     const links = screen.getAllByRole('link').map(a => a.getAttribute('href'));
     expect(links.filter(href => !own.has(href ?? ''))).toEqual([]);
     expect(screen.queryByText(/enseignants|Changer de profil|Vous n'êtes pas étudiant|Vous êtes étudiant/i)).toBeNull();
+  });
+
+  it("propose « Mot de passe oublié » dans l'espace de connexion, sans quitter l'espace", async () => {
+    renderAt('/jury/login');
+    const link = await screen.findByRole('link', { name: 'Mot de passe oublié ?' });
+    expect(link.getAttribute('href')).toBe('/jury/mot-de-passe-oublie');
+    renderAt('/jury/mot-de-passe-oublie');
+    expect(await screen.findByRole('heading', { name: 'Réinitialisez votre mot de passe' })).toBeInTheDocument();
   });
 
   it('redirige les anciennes adresses /pro vers le nouvel espace', async () => {

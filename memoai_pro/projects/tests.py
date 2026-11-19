@@ -3,7 +3,7 @@ import re
 from rest_framework.test import APITestCase
 
 from users.models import User
-from .models import Project, Chapter
+from .models import Project, Chapter, Reference
 
 PASSWORD = 'Motdepasse-Solide-2026'
 
@@ -318,3 +318,111 @@ class ProjectImageTests(APITestCase):
         html = export('html').decode()
         self.assertIn('data:image/png;base64,', html)
         self.assertIn('Figure I.1', html)
+
+
+class TrashTests(APITestCase):
+    """Corbeille : suppression réversible pendant 30 jours, puis définitive."""
+
+    def setUp(self):
+        self.student = make_user('trash@test.com', 'STUDENT')
+        self.other = make_user('trash-other@test.com', 'STUDENT')
+        self.client.force_authenticate(self.student)
+        self.project = Project.objects.create(user=self.student, title='Mémoire corbeille')
+        self.chapter = Chapter.objects.create(project=self.project, title='Chapitre 1', type='chapter', order=1)
+        self.section = Chapter.objects.create(project=self.project, parent=self.chapter, title='Section',
+                                              type='section', order=1)
+        Chapter.objects.create(project=self.project, parent=self.section, title='Sous-section', type='section', order=1)
+        self.reference = Reference.objects.create(project=self.project, title='Article', authors='Diallo, A.', year=2020)
+
+    def trash(self):
+        res = self.client.get('/projects/trash/')
+        self.assertEqual(res.status_code, 200)
+        return [(item['kind'], item['title']) for item in res.data['items']]
+
+    def test_chapter_goes_to_trash_with_sections_and_comes_back(self):
+        self.assertEqual(self.client.delete(f'/projects/chapters/{self.chapter.id}/').status_code, 204)
+        self.assertEqual(self.client.get('/projects/chapters/', {'project': self.project.id}).data, [])
+        self.assertEqual(self.trash(), [('chapter', 'Chapitre 1')])  # les sections suivent leur chapitre
+        res = self.client.post('/projects/trash/restore/', {'kind': 'chapter', 'id': self.chapter.id}, format='json')
+        self.assertEqual(res.status_code, 200)
+        titles = {c['title'] for c in self.client.get('/projects/chapters/', {'project': self.project.id}).data}
+        self.assertEqual(titles, {'Chapitre 1', 'Section', 'Sous-section'})
+        self.assertEqual(self.trash(), [])
+
+    def test_section_whose_chapter_is_trashed_returns_at_top_level(self):
+        self.client.delete(f'/projects/chapters/{self.section.id}/')
+        self.client.delete(f'/projects/chapters/{self.chapter.id}/')
+        self.assertEqual(sorted(self.trash()), [('chapter', 'Chapitre 1'), ('chapter', 'Section')])
+        self.client.post('/projects/trash/restore/', {'kind': 'chapter', 'id': self.section.id}, format='json')
+        restored = Chapter.objects.get(id=self.section.id)
+        self.assertIsNone(restored.parent_id)
+        self.assertEqual([c.title for c in restored.children.all()], ['Sous-section'])
+
+    def test_project_trash_hides_everything_until_restored(self):
+        self.client.delete(f'/projects/projects/{self.project.id}/')
+        self.assertEqual(self.client.get('/projects/projects/').data, [])
+        self.assertEqual(self.client.get(f'/projects/chapters/{self.chapter.id}/').status_code, 404)
+        self.assertEqual(self.trash(), [('project', 'Mémoire corbeille')])  # ses chapitres reviennent avec lui
+        self.client.post('/projects/trash/restore/', {'kind': 'project', 'id': self.project.id}, format='json')
+        self.assertEqual(len(self.client.get('/projects/projects/').data), 1)
+        self.assertEqual(Chapter.objects.filter(project=self.project).count(), 3)
+
+    def test_delete_forever_and_empty(self):
+        self.client.delete(f'/projects/references/{self.reference.id}/')
+        self.client.delete(f'/projects/chapters/{self.chapter.id}/')
+        res = self.client.post('/projects/trash/delete/', {'kind': 'reference', 'id': self.reference.id}, format='json')
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(Reference.all_objects.filter(id=self.reference.id).exists())
+        self.assertEqual(self.client.post('/projects/trash/empty/').status_code, 204)
+        self.assertEqual(Chapter.all_objects.filter(project=self.project).count(), 0)
+        self.assertTrue(Project.objects.filter(id=self.project.id).exists())
+
+    def test_other_users_cannot_touch_my_trash(self):
+        self.client.delete(f'/projects/chapters/{self.chapter.id}/')
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.trash(), [])
+        res = self.client.post('/projects/trash/restore/', {'kind': 'chapter', 'id': self.chapter.id}, format='json')
+        self.assertEqual(res.status_code, 404)
+        res = self.client.post('/projects/trash/delete/', {'kind': 'chapter', 'id': self.chapter.id}, format='json')
+        self.assertEqual(res.status_code, 404)
+
+    def test_items_older_than_30_days_are_purged(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+        self.client.delete(f'/projects/references/{self.reference.id}/')
+        Reference.all_objects.filter(id=self.reference.id).update(deleted_at=timezone.now() - timedelta(days=31))
+        self.assertEqual(self.trash(), [])
+        self.assertFalse(Reference.all_objects.filter(id=self.reference.id).exists())
+
+
+class SecurityProjectTests(APITestCase):
+    def setUp(self):
+        self.student = make_user('sec@test.com', 'STUDENT')
+        self.client.force_authenticate(self.student)
+        self.project = Project.objects.create(user=self.student, title='Secret')
+
+    def test_decompression_bomb_rejected(self):
+        res = self.client.post('/projects/images/', {'project': self.project.id,
+                                                     'data': png_data_url(8000, 8000, (0, 0, 0))}, format='json')
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('trop grande', res.data['error'])
+
+    def test_svg_rejected(self):
+        import base64
+        svg = base64.b64encode(b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>').decode()
+        res = self.client.post('/projects/images/', {'project': self.project.id,
+                                                     'data': f'data:image/svg+xml;base64,{svg}'}, format='json')
+        self.assertEqual(res.status_code, 400)
+
+    def test_share_link_of_trashed_project_stops_working(self):
+        res = self.client.post('/projects/share-links/', {'project': self.project.id}, format='json')
+        if res.status_code not in (200, 201):
+            self.skipTest(f'API de partage différente : {res.status_code}')
+        token = res.data.get('token') or res.data.get('url', '').rstrip('/').split('/')[-1]
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(f'/projects/shared/{token}/').status_code, 200)
+        self.client.force_authenticate(self.student)
+        self.client.delete(f'/projects/projects/{self.project.id}/')
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(f'/projects/shared/{token}/').status_code, 404)

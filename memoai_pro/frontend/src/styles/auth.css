@@ -140,3 +140,10 @@
   .scope-auth .form-side{padding:calc(20px + var(--safe-top)) calc(16px + var(--safe-right)) calc(40px + var(--safe-bottom)) calc(16px + var(--safe-left))}
 }
 @media(pointer:coarse){.scope-auth .tabs a{padding:12px}}
+.scope-auth .forgot-row{display:flex;justify-content:flex-end;margin:-6px 0 14px}
+.scope-auth .forgot-link{font-size:13px;font-weight:700;color:var(--teal);text-decoration:none}
+.scope-auth .forgot-link:hover,.scope-auth .forgot-link:focus-visible{text-decoration:underline}
+.scope-auth .success{display:flex;gap:10px;align-items:flex-start;padding:14px 16px;margin:4px 0 16px;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;border-radius:11px;font-size:13.5px;line-height:1.55}
+.scope-auth .back-link{display:inline-block;margin-top:18px;font-size:13.5px;font-weight:700;color:var(--teal);text-decoration:none}
+.scope-auth .back-link:hover{text-decoration:underline}
+.scope-auth .hint{font-size:12px;color:var(--muted);margin:-6px 0 14px}

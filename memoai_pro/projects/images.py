@@ -23,6 +23,8 @@ from .models import ProjectImage
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024      # avant redimensionnement
 MAX_SIDE = 1600                          # pixels, côté le plus long
 MAX_IMAGES_PER_PROJECT = 150
+MAX_PIXELS = 40_000_000
+ALLOWED_FORMATS = {'PNG', 'JPEG', 'WEBP', 'GIF', 'MPO'}  # MPO : certaines photos d'appareils
 _DATA_URL = re.compile(r'^data:image/[a-zA-Z0-9.+-]+;base64,(?P<data>.+)$', re.DOTALL)
 
 
@@ -33,11 +35,20 @@ def figure_marker(image_id, caption=''):
 def normalize_image(raw):
     """Vérifie que les octets sont une vraie image, la réduit à 1600 px et la convertit
     en PNG (dessins, transparence) ou JPEG (photos). Renvoie (octets, type, largeur, hauteur)."""
+    import warnings
+
     from PIL import Image, ImageOps, UnidentifiedImageError
+    Image.MAX_IMAGE_PIXELS = MAX_PIXELS  # « bombes de décompression » : image minuscule qui occupe des Go en mémoire
     try:
-        image = Image.open(BytesIO(raw))
-        image.load()
-    except (UnidentifiedImageError, OSError, ValueError):
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', Image.DecompressionBombWarning)
+            image = Image.open(BytesIO(raw))
+            if image.format not in ALLOWED_FORMATS:
+                raise ValidationError({'error': 'Format non pris en charge (PNG, JPEG, WEBP ou GIF).'})
+            image.load()
+    except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+        raise ValidationError({'error': 'Image trop grande (40 mégapixels maximum).'})
+    except (UnidentifiedImageError, OSError, ValueError, SyntaxError):
         raise ValidationError({'error': "Ce fichier n'est pas une image valide (PNG, JPEG, WEBP ou GIF)."})
     source_format = (image.format or '').upper()  # perdu par exif_transpose
     image = ImageOps.exif_transpose(image)  # photos de téléphone : orientation correcte
@@ -57,6 +68,7 @@ def normalize_image(raw):
 
 class ProjectImageUploadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
+    throttle_scope = 'upload'
 
     def post(self, request):
         project = get_owned_project(request.user, request.data.get('project'))

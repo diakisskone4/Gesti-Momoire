@@ -214,10 +214,11 @@ class SharedProjectView(APIView):
     """Lecture publique d'un mémoire via un lien de partage : GET /projects/shared/<token>/."""
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
+    throttle_scope = 'shared'
 
     def get(self, request, token):
         link = ShareLink.objects.select_related('project__user').filter(token=token).first()
-        if link is None or (link.expires_at and link.expires_at < timezone.now()):
+        if link is None or (link.expires_at and link.expires_at < timezone.now()) or link.project.deleted_at:
             return Response({'error': 'Ce lien de partage est invalide ou a expiré.'}, status=status.HTTP_404_NOT_FOUND)
         project = link.project
 

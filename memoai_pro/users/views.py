@@ -9,7 +9,10 @@ from django.utils.crypto import get_random_string
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework_simplejwt.views import TokenRefreshView
+
+from . import security
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from django.db.models import Count, Q, Sum
@@ -25,6 +28,9 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 class RegisterView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = 'register'
+
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
@@ -38,13 +44,21 @@ class RegisterView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class LoginView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = 'login'
+
     def post(self, request):
-        email = request.data.get('email')
-        password = request.data.get('password')
+        email = str(request.data.get('email') or '').strip()[:254]
+        password = str(request.data.get('password') or '')[:256]
         # Chaque espace de connexion (étudiant, encadreur, jury...) envoie
         # le rôle attendu : on refuse un compte d'un autre rôle.
         expected_role = request.data.get('role')
-        user = authenticate(email=email, password=password)
+        locked = security.lockout_remaining(email)
+        if locked:
+            return Response({'error': f'Trop de tentatives échouées. Réessayez dans {locked} minute(s).'},
+                            status=status.HTTP_429_TOO_MANY_REQUESTS)
+        # Les échecs sont comptés par le moteur d'authentification (users.security.LockoutModelBackend).
+        user = authenticate(request, email=email, password=password) if email and password else None
         if user and user.is_active:
             if expected_role and user.role != expected_role:
                 return Response({
@@ -58,7 +72,7 @@ class LoginView(APIView):
                 'refresh': str(refresh),
                 'access': str(refresh.access_token),
             })
-        return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+        return Response({'error': 'Email ou mot de passe incorrect.'}, status=status.HTTP_401_UNAUTHORIZED)
 
 class ProfileView(APIView):
     permission_classes = [IsAuthenticated]
@@ -84,6 +98,7 @@ class LogoutView(APIView):
 
 class Request2FAView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'two_factor'
     def post(self, request):
         code = get_random_string(length=6, allowed_chars='0123456789')
         request.user.totp_code = code
@@ -103,9 +118,12 @@ class Request2FAView(APIView):
 
 class Verify2FAView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'two_factor'
+
     def post(self, request):
-        code = request.data.get('code')
-        if code and request.user.totp_code == code:
+        from django.utils.crypto import constant_time_compare
+        code = str(request.data.get('code') or '')
+        if code and request.user.totp_code and constant_time_compare(request.user.totp_code, code):
             request.user.two_factor_enabled = True
             request.user.totp_code = ''
             request.user.save(update_fields=['two_factor_enabled', 'totp_code'])
@@ -114,6 +132,7 @@ class Verify2FAView(APIView):
 
 class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'password'
     def post(self, request):
         old = request.data.get('old_password')
         new = request.data.get('new_password')
@@ -125,10 +144,15 @@ class ChangePasswordView(APIView):
             return Response({'error': ' '.join(e.messages)}, status=400)
         request.user.set_password(new)
         request.user.save(update_fields=['password'])
-        return Response({'status': 'password updated'})
+        # Toutes les autres sessions (autres appareils, jeton volé) sont fermées ;
+        # cette session reçoit de nouveaux jetons.
+        security.revoke_all_tokens(request.user)
+        refresh = RefreshToken.for_user(request.user)
+        return Response({'status': 'password updated', 'refresh': str(refresh), 'access': str(refresh.access_token)})
 
 class DeleteAccountView(APIView):
     permission_classes = [IsAuthenticated]
+    throttle_scope = 'password'
     def post(self, request):
         user = request.user
         if not user.check_password(request.data.get('password') or ''):
@@ -136,7 +160,12 @@ class DeleteAccountView(APIView):
         user.delete()
         return Response({'status': 'account deleted'})
 class GoogleOAuthView(APIView):
+    permission_classes = [AllowAny]
+    throttle_scope = 'login'
+
     def post(self, request):
+        if not settings.GOOGLE_CLIENT_ID:
+            return Response({'error': 'La connexion Google est désactivée.'}, status=404)
         token = request.data.get('id_token')
         if not token:
             return Response({'error': 'id_token requis'}, status=400)
@@ -147,6 +176,11 @@ class GoogleOAuthView(APIView):
         if resp.status_code != 200:
             return Response({'error': 'Invalid token'}, status=400)
         data = resp.json()
+        # Le jeton doit avoir été émis pour CETTE application (sinon n'importe quel site
+        # utilisant « Se connecter avec Google » pourrait se connecter à la place de l'utilisateur).
+        if data.get('aud') != settings.GOOGLE_CLIENT_ID or data.get('iss') not in (
+                'accounts.google.com', 'https://accounts.google.com'):
+            return Response({'error': 'Invalid token'}, status=400)
         email = data.get('email')
         if not email or str(data.get('email_verified')).lower() != 'true':
             return Response({'error': 'Email Google non vérifié'}, status=400)
@@ -158,6 +192,9 @@ class GoogleOAuthView(APIView):
             )
         if not user.is_active:
             return Response({'error': 'Ce compte est suspendu.'}, status=403)
+        if user.role != 'STUDENT':
+            # Encadreurs, jurys, administrateurs : connexion par mot de passe dans leur espace dédié.
+            return Response({'error': 'Utilisez la connexion par mot de passe de votre espace.'}, status=403)
         refresh = RefreshToken.for_user(user)
         return Response({
             'user': ProfileSerializer(user).data,
@@ -245,3 +282,8 @@ class AdminStatsView(APIView):
             'templates_sold': templates['sold'],
             'templates_revenue': float(templates['revenue'] or 0),
         })
+
+
+class ThrottledTokenRefreshView(TokenRefreshView):
+    """Renouvellement du jeton d'accès, limité en fréquence."""
+    throttle_scope = 'refresh'

@@ -16,7 +16,16 @@ export const authApi = {
   profile: () => request<User>('/users/profile/'),
   updateProfile: (data: Partial<User>) => request<User>('/users/profile/', { method: 'PUT', body: data }),
   changePassword: (old_password: string, new_password: string) =>
-    request('/users/change-password/', { method: 'POST', body: { old_password, new_password } }),
+    request<{ status: string; access?: string; refresh?: string }>(
+      '/users/change-password/', { method: 'POST', body: { old_password, new_password } },
+    ),
+  /** Mot de passe oublié : envoie un lien de réinitialisation à l'adresse email du compte. */
+  requestPasswordReset: (email: string) =>
+    request<{ message: string }>('/users/password-reset/', { method: 'POST', body: { email } }),
+  confirmPasswordReset: (uid: string, token: string, new_password: string) =>
+    request<{ message: string; role: string }>('/users/password-reset/confirm/', {
+      method: 'POST', body: { uid, token, new_password },
+    }),
   directory: (role: string, search = '') => request<User[]>('/users/directory/', { params: { role, search } }),
 };
 
@@ -59,6 +68,21 @@ export const imagesApi = {
     request<UploadedImage>('/projects/images/', { method: 'POST', body: { project, data, caption } }),
   file: (id: number) => request<Response>(`/projects/images/${id}/`, { raw: true }),
   remove: (id: number) => request(`/projects/images/${id}/`, { method: 'DELETE' }),
+};
+
+export type TrashKind = 'project' | 'chapter' | 'reference';
+export interface TrashItem {
+  kind: TrashKind; id: number; title: string; details: string;
+  project_id: number; project_title: string; deleted_at: string; purge_at: string;
+}
+
+/** Corbeille : éléments supprimés, restaurables pendant `retention_days` jours. */
+export const trashApi = {
+  list: () => request<{ retention_days: number; items: TrashItem[] }>('/projects/trash/'),
+  restore: (kind: TrashKind, id: number) =>
+    request<{ status: string; title: string }>('/projects/trash/restore/', { method: 'POST', body: { kind, id } }),
+  remove: (kind: TrashKind, id: number) => request('/projects/trash/delete/', { method: 'POST', body: { kind, id } }),
+  empty: () => request('/projects/trash/empty/', { method: 'POST', body: {} }),
 };
 
 export const referencesApi = {
