@@ -135,3 +135,25 @@ class Reference(models.Model):
     
     def __str__(self):
         return self.title
+
+class ProjectImage(models.Model):
+    """Image (figure, photo, schéma, graphique) insérée dans un mémoire.
+
+    Stockée dans la base de données : l'hébergement (Vercel) n'a pas de disque permanent.
+    Les images sont redimensionnées à l'envoi (1600 px maximum) pour rester légères.
+    Dans le texte d'un chapitre, une figure s'écrit sur sa propre ligne : [Figure:ID | légende].
+    """
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='images')
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    data = models.BinaryField()
+    content_type = models.CharField(max_length=30)
+    width = models.PositiveIntegerField()
+    height = models.PositiveIntegerField()
+    size = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f'Image {self.id} ({self.width}×{self.height}) — {self.project_id}'

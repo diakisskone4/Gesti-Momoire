@@ -1,3 +1,5 @@
+import re
+
 from rest_framework.test import APITestCase
 
 from users.models import User
@@ -113,16 +115,24 @@ class AcademicExportFormatTests(APITestCase):
         doc = Document(BytesIO(self.export('docx')))
 
         from docx.oxml.ns import qn
-        # Page de garde sans numéro, pages liminaires en chiffres romains, corps en chiffres arabes.
-        cover, front, main = doc.sections
+        # Page de garde sans numéro, pages liminaires en chiffres romains, corps en chiffres arabes ;
+        # une section par grande partie (Introduction, Chapitre I), ouverte par une page de titre.
+        cover, front, intro, chapter = doc.sections
         for section in doc.sections:
             self.assertEqual((round(section.left_margin.cm, 2), round(section.right_margin.cm, 2),
                               round(section.top_margin.cm, 2), round(section.bottom_margin.cm, 2)), (4.0, 2.5, 2.5, 2.5))
         self.assertNotIn('PAGE', cover.footer._element.xml)
-        for section, number_format in ((front, 'lowerRoman'), (main, 'decimal')):
+        for section, number_format, start in ((front, 'lowerRoman', '1'), (intro, 'decimal', '1'),
+                                              (chapter, 'decimal', None)):
             pg_num = section._sectPr.find(qn('w:pgNumType'))
-            self.assertEqual((pg_num.get(qn('w:fmt')), pg_num.get(qn('w:start'))), (number_format, '1'))
+            self.assertEqual((pg_num.get(qn('w:fmt')), pg_num.get(qn('w:start'))), (number_format, start))
             self.assertIn('PAGE', section.footer._element.xml)
+        for section in (intro, chapter):
+            self.assertTrue(section.different_first_page_header_footer)  # page de titre sans en-tête ni numéro
+        # En-tête courant souligné « Chapitre I ...... Revue de la littérature ».
+        self.assertEqual(chapter.header.paragraphs[0].text, 'Chapitre I\tRevue de la littérature')
+        self.assertIn('w:pBdr', chapter.header._element.xml)
+        self.assertEqual(intro.header.paragraphs[0].text, '\tIntroduction générale')
 
         normal = doc.styles['Normal']
         self.assertEqual((normal.font.name, normal.font.size), ('Times New Roman', Pt(12)))
@@ -143,12 +153,29 @@ class AcademicExportFormatTests(APITestCase):
         headings = [(p.style.name, p.text) for p in doc.paragraphs if p.style.name.startswith('Heading')]
         self.assertEqual(headings, [
             ('Heading 1', 'Dédicace'), ('Heading 1', 'Remerciements'), ('Heading 1', 'Introduction générale'),
-            ('Heading 1', 'Chapitre 1 : Revue de la littérature'), ('Heading 2', 'Définition des concepts'),
-            ('Heading 3', 'Inclusion financière'),
+            ('Heading 1', 'Chapitre I\nRevue de la littérature'), ('Heading 2', 'I.1. Définition des concepts'),
+            ('Heading 3', 'I.1.1. Inclusion financière'),
         ])
+        # Pages de titre des grandes parties.
+        dividers = [p.text for p in doc.paragraphs if p.runs and p.runs[0].font.size == Pt(36)]
+        self.assertEqual(dividers, ['Introduction générale', 'Chapitre I'])
         text = '\n'.join(p.text for p in doc.paragraphs)
         self.assertNotIn('Conseil du modèle', text)  # conseils de rédaction retirés du document final
         self.assertIn('Merci à tous.', text)
+
+        # Sommaire : champ « table des matières » dans les pages liminaires, juste avant l'introduction,
+        # mis à jour par Word à l'ouverture (numéros de page).
+        body_xml = doc.element.body.xml
+        self.assertIn('TOC \\o "1-4"', body_xml)
+        titles = [p.text for p in doc.paragraphs]
+        self.assertLess(titles.index('SOMMAIRE'), titles.index('Introduction générale'))
+        self.assertGreater(titles.index('SOMMAIRE'), titles.index('Remerciements'))
+        toc_lines = [p.text for p in doc.paragraphs if p.style.name.startswith('TOC')]
+        self.assertEqual(toc_lines[:4], ['Dédicace', 'Remerciements', 'Introduction générale',
+                                         'Chapitre I : Revue de la littérature'])
+        self.assertIn('I.1. Définition des concepts', toc_lines)
+        self.assertIn('I.1.1. Inclusion financière', toc_lines)
+        self.assertIn('updateFields', doc.settings.element.xml)
 
     def test_pdf_one_part_per_page_with_numbers(self):
         from io import BytesIO
@@ -156,15 +183,31 @@ class AcademicExportFormatTests(APITestCase):
         from PyPDF2 import PdfReader
         reader = PdfReader(BytesIO(self.export("pdf")))
         pages = [p.extract_text() for p in reader.pages]
-        # Page de titre + Dédicace + Remerciements + Introduction + Chapitre 1 (avec ses sections)
-        self.assertEqual(len(pages), 5)
-        for page, title in zip(pages[1:], ('DÉDICACE', 'REMERCIEMENTS', 'INTRODUCTION GÉNÉRALE', 'CHAPITRE 1')):
+        # Page de titre, Dédicace, Remerciements, Sommaire, puis chaque grande partie précédée
+        # de sa page de titre (sans en-tête ni numéro), comme dans les mémoires imprimés.
+        self.assertEqual(len(pages), 8)
+        for page, title in zip(pages[1:], ('DÉDICACE', 'REMERCIEMENTS', 'SOMMAIRE', 'Introduction générale',
+                                           'INTRODUCTION GÉNÉRALE', 'Chapitre I', 'CHAPITRE I')):
             self.assertIn(title, page)
-        self.assertIn('Définition des concepts', pages[4])
+        self.assertEqual(pages[4].strip(), 'Introduction générale')  # page de titre seule
+        self.assertEqual(pages[6].strip(), 'Chapitre I')
+        self.assertIn('REVUE DE LA LITTÉRATURE', pages[7])
+        self.assertIn('I.1. Définition des concepts', pages[7])
+        self.assertIn('I.1.1. Inclusion financière', pages[7])
+        # Le sommaire donne le numéro de page affiché de chaque partie et section.
+        toc = pages[3]
+        for entry, number in (('Dédicace', 'i'), ('Remerciements', 'ii'), ('Introduction générale', '2'),
+                              ('Chapitre I : Revue de la littérature', '4'), ('I.1. Définition des concepts', '4'),
+                              ('I.1.1. Inclusion financière', '4')):
+            # L'extraction de texte restitue la ligne « . . . numéro » juste avant le titre de l'entrée.
+            self.assertRegex(toc, rf'\. {number}\n{re.escape(entry)}\n')
         self.assertNotIn('Conseil du modèle', ''.join(pages))
-        # Dédicace et remerciements : i, ii ; à partir de l'introduction : 1, 2 ; rien sur la page de titre.
-        numbers = [page.strip().splitlines()[-1].strip() for page in pages[1:]]
-        self.assertEqual(numbers, ['i', 'ii', '1', '2'])
+        # Liminaires : i, ii, iii ; corps : 2, 4 (les pages de titre comptent mais n'affichent rien).
+        lines = [page.strip().splitlines() for page in pages]
+        self.assertEqual([lines[i][-1].strip() for i in (1, 2, 3)], ['i', 'ii', 'iii'])
+        # En-tête courant en bas de l'extraction : numéro puis « Chapitre I / Revue de la littérature ».
+        self.assertEqual(lines[5][-2:], ['2', 'Introduction générale'])
+        self.assertEqual(lines[7][-3:], ['4', 'Chapitre I', 'Revue de la littérature'])
         self.assertTrue(pages[0].startswith('MOBILE MONEY AU MALI'))
         self.assertNotIn(pages[0].strip().splitlines()[-1].strip(), ('1', 'i'))
         fonts = set()
@@ -176,3 +219,102 @@ class AcademicExportFormatTests(APITestCase):
         self.assertIn('/Times-Roman', fonts)
         box = reader.pages[1].mediabox
         self.assertEqual((round(float(box.width)), round(float(box.height))), (595, 842))  # A4
+
+
+class TocNotWrittenByAITests(APITestCase):
+    def test_sommaire_part_is_never_written_by_ai(self):
+        from unittest import mock
+        from django.test import override_settings
+        from modeles.models import MemoirTemplate
+        user = make_user('toc@test.com', 'STUDENT')
+        self.client.force_authenticate(user)
+        project = Project.objects.create(user=user, title='T', theme='T', desired_pages=40)
+        project.template = MemoirTemplate.objects.get(slug='licence-classique')  # modèle gratuit
+        project.save()
+        sommaire = Chapter.objects.create(project=project, title='Sommaire', type='preliminary', order=1)
+        with override_settings(AI_PROVIDER='openrouter', OPENAI_API_KEY='k'),                 mock.patch('ai.services._openrouter_client') as client:
+            res = self.client.post(f'/projects/chapters/{sommaire.id}/generate_content/')
+        self.assertEqual(res.status_code, 400)
+        self.assertIn('automatiquement', res.data['error'])
+        client.assert_not_called()
+
+
+def png_data_url(width=300, height=200, color=(200, 30, 30)):
+    import base64
+    from io import BytesIO
+
+    from PIL import Image
+    buffer = BytesIO()
+    Image.new('RGB', (width, height), color).save(buffer, 'PNG')
+    return 'data:image/png;base64,' + base64.b64encode(buffer.getvalue()).decode()
+
+
+class ProjectImageTests(APITestCase):
+    """Figures des mémoires : envoi par l'auteur, lecture par l'encadreur, insertion dans les exports."""
+
+    def setUp(self):
+        self.student = make_user('img@test.com', 'STUDENT')
+        self.supervisor = make_user('img-enc@test.com', 'SUPERVISOR')
+        self.other = make_user('img-other@test.com', 'STUDENT')
+        self.project = Project.objects.create(user=self.student, title='Figures', supervisor=self.supervisor)
+
+    def upload(self, data=None, caption='Évolution du nombre de comptes'):
+        self.client.force_authenticate(self.student)
+        return self.client.post('/projects/images/', {'project': self.project.id, 'data': data or png_data_url(),
+                                                      'caption': caption}, format='json')
+
+    def test_owner_uploads_and_gets_marker(self):
+        res = self.upload(png_data_url(3000, 1500))
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual((res.data['width'], res.data['height']), (1600, 800))  # réduite à 1600 px
+        self.assertEqual(res.data['marker'], f"[Figure:{res.data['id']} | Évolution du nombre de comptes]")
+
+    def test_invalid_image_and_other_users_rejected(self):
+        self.assertEqual(self.upload('data:image/png;base64,bm90IGFuIGltYWdl').status_code, 400)
+        self.client.force_authenticate(self.other)
+        res = self.client.post('/projects/images/', {'project': self.project.id, 'data': png_data_url()}, format='json')
+        self.assertIn(res.status_code, (403, 404))
+
+    def test_read_and_delete_rights(self):
+        image_id = self.upload().data['id']
+        url = f'/projects/images/{image_id}/'
+        self.client.force_authenticate(self.supervisor)
+        res = self.client.get(url)
+        self.assertEqual((res.status_code, res['Content-Type']), (200, 'image/png'))
+        self.assertEqual(self.client.delete(url).status_code, 403)
+        self.client.force_authenticate(self.other)
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.client.force_authenticate(self.student)
+        self.assertEqual(self.client.delete(url).status_code, 204)
+
+    def test_figure_in_exports(self):
+        from io import BytesIO
+
+        from docx import Document
+        from PyPDF2 import PdfReader
+        marker = self.upload().data['marker']
+        chapter = Chapter.objects.create(project=self.project, title='Chapitre 1 : Contexte', type='chapter',
+                                         content='Texte.', order=1)
+        Chapter.objects.create(project=self.project, parent=chapter, title='Données', type='section',
+                               content=f'Avant la figure.\n{marker}\nAprès la figure.', order=1)
+
+        def export(fmt):
+            res = self.client.post(f'/projects/projects/{self.project.id}/export/', {'format': fmt}, format='json')
+            self.assertEqual(res.status_code, 200)
+            return b''.join(res.streaming_content) if hasattr(res, 'streaming_content') else res.content
+
+        doc = Document(BytesIO(export('docx')))
+        text = '\n'.join(p.text for p in doc.paragraphs)
+        self.assertIn('Figure I.1 : Évolution du nombre de comptes', text)
+        self.assertNotIn('[Figure:', text)
+        self.assertEqual(len(doc.inline_shapes), 1)
+
+        reader = PdfReader(BytesIO(export('pdf')))
+        pdf_text = ''.join(page.extract_text() for page in reader.pages)
+        self.assertIn('Figure I.1 : Évolution du nombre de comptes', pdf_text)
+        # reportlab place l'image dans une XObject de la page (/Resources /XObject).
+        self.assertIn('/XObject', ''.join(str(page['/Resources']) for page in reader.pages))
+
+        html = export('html').decode()
+        self.assertIn('data:image/png;base64,', html)
+        self.assertIn('Figure I.1', html)

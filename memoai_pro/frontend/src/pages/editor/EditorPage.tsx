@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { ApiError, describeError } from '../../api/client';
@@ -12,6 +12,7 @@ import CollaborationModal from './CollaborationModal';
 import CommentsModal from './CommentsModal';
 import CoverModal from './CoverModal';
 import ExportModal from './ExportModal';
+import FigureTools from './FigureTools';
 import ReferencesModal from './ReferencesModal';
 import SettingsModal from './SettingsModal';
 import VerifyModal from './VerifyModal';
@@ -26,6 +27,7 @@ const PLACEHOLDER = /^\s*(\[(Conseil du modèle|Sous-parties prévues)[^\]]*\]\s
 const isPlaceholder = (content: string | null) => !content || PLACEHOLDER.test(content);
 const normalize = (title: string) => title.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const isPersonalPage = (c: Chapter) => /dedicace|remerciement/.test(normalize(c.title));
+const isTocPage = (c: Chapter) => /^(sommaire|table des matieres)/.test(normalize(c.title).trim());
 /** Pages établies à partir du texte des chapitres : résumé, sigles, liste des tableaux et figures
  *  (liminaires) et annexes (fin). */
 const isTextBasedPage = (c: Chapter) =>
@@ -47,7 +49,7 @@ const MAX_ATTEMPTS = 3; // une réponse de l'IA coupée avant la fin est reprise
 export function aiWritingQueue(chapters: Chapter[]): Chapter[] {
   const top = chapters.filter(c => c.parent === null).sort((a, b) => a.order - b.order || a.id - b.id);
   const sections = (id: number) => chapters.filter(c => c.parent === id);
-  const body = top.filter(c => !isPersonalPage(c) && c.type !== 'preliminary' && c.type !== 'back'
+  const body = top.filter(c => !isPersonalPage(c) && !isTocPage(c) && c.type !== 'preliminary' && c.type !== 'back'
     && (isPlaceholder(c.content) || sections(c.id).some(s => isPlaceholder(s.content))));
   const pages = top.filter(c => !isPersonalPage(c) && isTextBasedPage(c) && isPlaceholder(c.content));
   return [...body, ...pages];
@@ -89,6 +91,7 @@ export default function EditorPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [saving, setSaving] = useState(false);
+  const contentRef = useRef<HTMLTextAreaElement>(null);
   const [generating, setGenerating] = useState(false);
   const [modal, setModal] = useState<ModalName>(null);
   const [aiRun, setAiRun] = useState<AiRun | null>(null);
@@ -98,6 +101,15 @@ export default function EditorPage() {
   const selected = chapters.find(c => c.id === selectedId) ?? null;
   const dirty = !!selected && (draft.title !== selected.title || draft.content !== (selected.content ?? ''));
   const tree = useMemo(() => outline(chapters), [chapters]);
+  // Sommaire : généré automatiquement à l'export. Affiché dans le plan juste avant le corps du mémoire
+  // (ou à la place d'une partie « Sommaire » ajoutée par l'étudiant).
+  const [tocOpen, setTocOpen] = useState(false);
+  const hasTocChapter = tree.some(({ chapter, depth }) => depth === 0 && isTocPage(chapter));
+  const tocIndex = (() => {
+    const i = tree.findIndex(({ chapter, depth }) => depth === 0 && chapter.type !== 'preliminary' && !isTocPage(chapter));
+    return i === -1 ? tree.length : i;
+  })();
+  const tocPreview = tree.filter(({ chapter, depth }) => depth <= 1 && !isTocPage(chapter));
   const topLevelCount = chapters.filter(c => c.parent === null).length;
   const aiQueue = useMemo(() => aiWritingQueue(chapters), [chapters]);
   // Lus pendant la rédaction IA (boucle asynchrone) : valeurs à jour sans relancer la boucle.
@@ -153,9 +165,20 @@ export default function EditorPage() {
   }, [dirty]);
 
   const select = (chapter: Chapter) => {
-    if (chapter.id === selectedId) return;
+    if (isTocPage(chapter) && chapter.parent === null) {
+      openToc();
+      return;
+    }
+    if (chapter.id === selectedId && !tocOpen) return;
     if (dirty && !window.confirm('Des modifications ne sont pas enregistrées. Changer de chapitre quand même ?')) return;
+    setTocOpen(false);
     setSelectedId(chapter.id);
+  };
+
+  const openToc = () => {
+    if (tocOpen) return;
+    if (dirty && !window.confirm('Des modifications ne sont pas enregistrées. Changer de chapitre quand même ?')) return;
+    setTocOpen(true);
   };
 
   const save = useCallback(async () => {
@@ -406,15 +429,30 @@ export default function EditorPage() {
 
                 {tree.length > 0 ? (
                   <div className="chapter-list">
-                    {tree.map(({ chapter, depth, number }) => (
-                      <button type="button" key={chapter.id}
-                              className={`chapter-item${chapter.id === selectedId ? ' selected' : ''}`}
-                              style={{ paddingLeft: 12 + depth * 16, fontSize: depth ? 13 : undefined }}
-                              onClick={() => select(chapter)}>
-                        <span className="chapter-number">{number}</span>
-                        <span>{chapter.title}</span>
-                      </button>
+                    {tree.map(({ chapter, depth, number }, index) => (
+                      <Fragment key={chapter.id}>
+                        {!hasTocChapter && index === tocIndex && (
+                          <button type="button" className={`chapter-item toc-item${tocOpen ? ' selected' : ''}`}
+                                  onClick={openToc} title="Généré automatiquement à l'export">
+                            <span className="chapter-number">≡</span>
+                            <span>Sommaire <small>(automatique)</small></span>
+                          </button>
+                        )}
+                        <button type="button"
+                                className={`chapter-item${(isTocPage(chapter) && depth === 0 ? tocOpen : chapter.id === selectedId && !tocOpen) ? ' selected' : ''}`}
+                                style={{ paddingLeft: 12 + depth * 16, fontSize: depth ? 13 : undefined }}
+                                onClick={() => select(chapter)}>
+                          <span className="chapter-number">{number}</span>
+                          <span>{chapter.title}</span>
+                        </button>
+                      </Fragment>
                     ))}
+                    {!hasTocChapter && tocIndex === tree.length && (
+                      <button type="button" className={`chapter-item toc-item${tocOpen ? ' selected' : ''}`} onClick={openToc}>
+                        <span className="chapter-number">≡</span>
+                        <span>Sommaire <small>(automatique)</small></span>
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="empty-chapters">
@@ -425,14 +463,37 @@ export default function EditorPage() {
               </aside>
 
               <section className="workspace">
-                {!selected && tree.length > 0 && (
+                {tocOpen && (
+                  <div className="toc-preview">
+                    <div className="workspace-header">
+                      <div><h3>Sommaire</h3></div>
+                      <span className="status">Généré automatiquement</span>
+                    </div>
+                    <p className="toc-note">
+                      Le sommaire est créé automatiquement à l'export (Word et PDF), à partir de votre plan, avec les
+                      numéros de page : chiffres romains pour les pages liminaires, puis 1, 2, 3… à partir de
+                      l'introduction. Il se met à jour tout seul si vous modifiez les titres. Dans Word, acceptez la
+                      mise à jour des champs à l'ouverture pour afficher les numéros de page.
+                    </p>
+                    <ol className="toc-list">
+                      {tocPreview.map(({ chapter, depth, number }) => (
+                        <li key={chapter.id} className={depth ? 'toc-sub' : 'toc-main'}>
+                          <span className="toc-number">{number}</span>
+                          <span>{chapter.title}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
+                {!tocOpen && !selected && tree.length > 0 && (
                   <div className="empty-chapters">
                     <h3>Sélectionnez un chapitre</h3>
                     <p>Choisissez un chapitre dans la liste de gauche pour commencer à rédiger.</p>
                   </div>
                 )}
 
-                {!selected && tree.length === 0 && (
+                {!tocOpen && !selected && tree.length === 0 && (
                   <div className="empty-chapters">
                     <h3>Commencez votre mémoire</h3>
                     <p>Créez un chapitre ou générez automatiquement un plan avec l'intelligence artificielle.</p>
@@ -444,7 +505,7 @@ export default function EditorPage() {
                   </div>
                 )}
 
-                {selected && (
+                {!tocOpen && selected && (
                   <div>
                     <div className="workspace-header">
                       <div><h3>{draft.title || 'Sans titre'}</h3></div>
@@ -461,10 +522,16 @@ export default function EditorPage() {
 
                     <div className="field-label">
                       <label htmlFor="chapterContent">Contenu</label>
-                      <textarea id="chapterContent" className="content-editor" value={draft.content}
+                      <textarea id="chapterContent" ref={contentRef} className="content-editor" value={draft.content}
                                 onChange={e => setDraft(d => ({ ...d, content: e.target.value }))}
                                 placeholder="Commencez à rédiger votre chapitre..." />
                     </div>
+
+                    {project && (
+                      <FigureTools projectId={project.id} content={draft.content}
+                                   cursor={() => contentRef.current?.selectionStart ?? draft.content.length}
+                                   onChange={content => setDraft(d => ({ ...d, content }))} />
+                    )}
 
                     <div className="editor-actions" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
                       <span style={{ marginRight: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>

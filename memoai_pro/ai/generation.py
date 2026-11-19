@@ -141,6 +141,8 @@ def page_kind(chapter):
     title = _normalized(chapter.title)
     if 'dedicace' in title or 'remerciement' in title:
         return 'personal'
+    if title.startswith('sommaire') or title.startswith('table des matieres'):
+        return 'toc'  # généré automatiquement à l'export, à partir du plan
     if chapter.type == 'preliminary':
         if 'resume' in title or 'abstract' in title:
             return 'abstract'
@@ -204,6 +206,8 @@ def write_chapter_content(project, chapter):
     kind = page_kind(chapter)
     if kind == 'personal':
         raise ValidationError({'error': 'La dédicace et les remerciements sont personnels : rédigez-les vous-même.'})
+    if kind == 'toc':
+        raise ValidationError({'error': "Le sommaire est généré automatiquement à l'export, avec les numéros de page."})
     if kind in TEXT_BASED_PAGES:
         return write_special_page(project, chapter, kind)
     if chapter.type in NON_GENERATED_TYPES:

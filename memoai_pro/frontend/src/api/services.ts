@@ -51,6 +51,16 @@ export const chaptersApi = {
     request<{ written: number; chapters: Chapter[] }>(`/projects/chapters/${id}/generate_content/`, { method: 'POST', body: {} }),
 };
 
+export interface UploadedImage { id: number; width: number; height: number; size: number; marker: string }
+
+/** Figures des mémoires : le texte d'un chapitre les référence par une ligne « [Figure:ID | légende] ». */
+export const imagesApi = {
+  upload: (project: number, data: string, caption: string) =>
+    request<UploadedImage>('/projects/images/', { method: 'POST', body: { project, data, caption } }),
+  file: (id: number) => request<Response>(`/projects/images/${id}/`, { raw: true }),
+  remove: (id: number) => request(`/projects/images/${id}/`, { method: 'DELETE' }),
+};
+
 export const referencesApi = {
   list: (projectId: number) => request<Reference[]>('/projects/references/', { params: { project_id: projectId } }),
   create: (data: Partial<Reference>) => request<Reference>('/projects/references/', { method: 'POST', body: data }),

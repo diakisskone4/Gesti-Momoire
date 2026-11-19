@@ -234,166 +234,51 @@ class ProjectViewSet(viewsets.ModelViewSet):
             f"Thème : {project.theme or 'Non spécifié'}",
         ]
 
-    def export_docx(self, project, include_chapters, include_bibliography):
-        """Word aux normes académiques (voir projects/document_format.py)."""
-        from . import document_format as fmt
-        doc = Document()
-        fmt.setup_docx(doc)
-
+    def _export_data(self, project, include_chapters, include_bibliography):
+        """Contenu à imprimer : plan numéroté, références, page de garde, images des figures."""
+        from . import memoir_export
+        outline = self._outline(project) if include_chapters else []
+        refs = project.references.all().order_by('authors', 'year') if include_bibliography else []
         cover = self._cover(project)
+        cover_lines = None
         if cover:
-            from modeles.covers import cover_lines
-            sizes = {'title': 20, 'header': 13, 'diploma': 12, 'person': 12, 'footer': 12, 'motto': 10, 'small': 10}
-            for text, role in cover_lines(cover[1]):
-                if role == 'space':
-                    fmt.centered_docx_paragraph(doc, '', 12, space_after_pt=12)
-                    continue
-                fmt.centered_docx_paragraph(doc, text, sizes.get(role, 11), bold=role in ('title', 'header', 'footer'),
-                                            italic=role in ('motto', 'diploma'))
-        else:
-            fmt.centered_docx_paragraph(doc, '', 12, space_after_pt=150)
-            fmt.centered_docx_paragraph(doc, project.title.upper(), 20, bold=True, space_after_pt=36)
-            for line in self._meta_lines(project):
-                fmt.centered_docx_paragraph(doc, line, 12, space_after_pt=6)
+            from modeles.covers import cover_lines as make_cover_lines
+            cover_lines = make_cover_lines(cover[1])
+        ids = memoir_export.figure_ids(outline)
+        images = {image.id: image for image in project.images.filter(id__in=ids)} if ids else {}
+        return memoir_export.ExportData(
+            project=project, parts=memoir_export.build_layout(outline),
+            references=[format_reference(r) for r in refs], cover_lines=cover_lines,
+            meta_lines=self._meta_lines(project), images=images,
+        )
 
-        # Pages liminaires en chiffres romains (i, ii...), corps du mémoire en chiffres arabes (1, 2...) :
-        # chaque changement de numérotation ouvre une nouvelle section Word (donc une nouvelle page).
-        numbering = None
-
-        def docx_heading(title, level, number_format):
-            nonlocal numbering
-            new_part = level == 1 and number_format != numbering
-            if new_part:
-                fmt.start_docx_part(doc, number_format)
-                numbering = number_format
-            paragraph = doc.add_heading(title, level=min(level, 4))
-            if new_part:
-                paragraph.paragraph_format.page_break_before = False  # la section commence déjà une page
-
-        if include_chapters:
-            for level, chapter in self._outline(project):
-                docx_heading(chapter.title, level, fmt.numbering_of(level, chapter))
-                fmt.add_docx_body(doc, chapter.content)
-
-        if include_bibliography:
-            refs = project.references.all().order_by('authors', 'year')
-            if refs:
-                docx_heading('Bibliographie', 1, fmt.MAIN_MATTER)
-                for ref in refs:
-                    paragraph = doc.add_paragraph(format_reference(ref))
-                    from docx.enum.text import WD_ALIGN_PARAGRAPH
-                    from docx.shared import Cm
-                    paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                    paragraph.paragraph_format.left_indent = Cm(1)
-                    paragraph.paragraph_format.first_line_indent = Cm(-1)
-
-        buffer = BytesIO()
-        doc.save(buffer)
-        buffer.seek(0)
+    def export_docx(self, project, include_chapters, include_bibliography):
+        """Word présenté comme un mémoire imprimé (voir projects/memoir_export.py)."""
+        from . import memoir_export
+        data = memoir_export.render_docx(self._export_data(project, include_chapters, include_bibliography))
         return FileResponse(
-            buffer, as_attachment=True, filename=safe_filename(project.title, 'docx'),
+            BytesIO(data), as_attachment=True, filename=safe_filename(project.title, 'docx'),
             content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         )
 
     def export_pdf(self, project, include_chapters, include_bibliography):
-        """PDF aux normes académiques (voir projects/document_format.py)."""
-        from reportlab.lib.enums import TA_CENTER
-        from reportlab.lib.styles import ParagraphStyle
-        from reportlab.platypus import PageBreak
-        from . import document_format as fmt
-
-        buffer = BytesIO()
-        MemoirDocTemplate, NumberingStart = fmt.pdf_classes()
-        doc = MemoirDocTemplate(buffer, pagesize=A4, title=project.title, author=project.user.full_name,
-                                **fmt.pdf_margins())
-        body, item, headings = fmt.pdf_styles()
-
-        def centered(text, size, font='Times-Roman', space_after=0):
-            style = ParagraphStyle(f'centre-{size}-{font}', fontName=font, fontSize=size, leading=size * 1.35,
-                                   alignment=TA_CENTER, spaceAfter=space_after)
-            return Paragraph(escape(text), style)
-
-        story = []
-        cover = self._cover(project)
-        if cover:
-            from modeles.covers import cover_lines
-            sizes = {'title': 20, 'header': 12, 'diploma': 12, 'person': 12, 'footer': 12, 'motto': 10, 'small': 10}
-            for text, role in cover_lines(cover[1]):
-                if role == 'space':
-                    story.append(Spacer(1, 1.2 * cm))
-                    continue
-                font = 'Times-Bold' if role in ('title', 'header', 'footer') else (
-                    'Times-Italic' if role in ('motto', 'diploma') else 'Times-Roman')
-                story.append(centered(text, sizes.get(role, 11), font))
-        else:
-            story.append(Spacer(1, 6 * cm))
-            story.append(centered(project.title.upper(), 20, 'Times-Bold', space_after=36))
-            story += [centered(line, 12, space_after=6) for line in self._meta_lines(project)]
-
-        numbering = None
-
-        def heading(level, title, number_format=fmt.MAIN_MATTER):
-            nonlocal numbering
-            if level == 1:
-                story.append(PageBreak())  # chaque partie commence sur une nouvelle page
-                if number_format != numbering:
-                    # Pages liminaires : i, ii... ; corps du mémoire : 1, 2... (chacune repart de 1).
-                    story.append(NumberingStart(number_format))
-                    numbering = number_format
-                title = title.upper()
-            story.append(Paragraph(escape(title), headings[min(level, 3)]))
-
-        if include_chapters:
-            for level, chapter in self._outline(project):
-                heading(level, chapter.title, fmt.numbering_of(level, chapter))
-                for text, is_item in fmt.body_paragraphs(chapter.content):
-                    story.append(Paragraph(escape(text), item if is_item else body))
-
-        if include_bibliography:
-            refs = project.references.all().order_by('authors', 'year')
-            if refs:
-                heading(1, 'Bibliographie')
-                ref_style = ParagraphStyle('reference', parent=body, alignment=0, firstLineIndent=-1 * cm, leftIndent=1 * cm)
-                story += [Paragraph(escape(format_reference(r)), ref_style) for r in refs]
-
-        doc.build(story)
-        buffer.seek(0)
-        return FileResponse(buffer, as_attachment=True, filename=safe_filename(project.title, 'pdf'),
+        """PDF présenté comme un mémoire imprimé (voir projects/memoir_export.py)."""
+        from . import memoir_export
+        data = memoir_export.render_pdf(self._export_data(project, include_chapters, include_bibliography))
+        return FileResponse(BytesIO(data), as_attachment=True, filename=safe_filename(project.title, 'pdf'),
                             content_type='application/pdf')
 
     def export_html(self, project, include_chapters, include_bibliography):
-        """HTML imprimable aux mêmes normes (Times New Roman, marges, une partie par page)."""
-        from . import document_format as fmt
-        cover_css = ''
+        """HTML imprimable aux mêmes normes."""
+        from . import memoir_export
+        cover_css = cover_html = ''
         cover = self._cover(project)
         if cover:
             from modeles.covers import render_cover_parts
             cover_css, cover_html = render_cover_parts(*cover)
             cover_css += '.page{margin:0 auto 40px;box-shadow:0 2px 12px #0002;page-break-after:always}'
-            body = [cover_html]
-        else:
-            body = [f'<p class="titre-page" style="font-size:20pt;font-weight:bold;margin-top:6cm">{escape(project.title.upper())}</p>']
-            body += [f'<p class="meta">{escape(line)}</p>' for line in self._meta_lines(project)]
-        if include_chapters:
-            for level, chapter in self._outline(project):
-                if level == 1:
-                    body.append(f'<h2 class="chapitre">{escape(chapter.title)}</h2>')
-                else:
-                    tag = f'h{min(level + 1, 6)}'
-                    body.append(f'<{tag}>{escape(chapter.title)}</{tag}>')
-                body += [f'<p class="item">{escape(t)}</p>' if is_item else f'<p>{escape(t)}</p>'
-                         for t, is_item in fmt.body_paragraphs(chapter.content)]
-        if include_bibliography:
-            refs = project.references.all().order_by('authors', 'year')
-            if refs:
-                body.append('<h2 class="chapitre">Bibliographie</h2>')
-                body += [f'<p class="ref">{escape(format_reference(r))}</p>' for r in refs]
-
-        html = (
-            '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">'
-            f'<title>{escape(project.title)}</title><style>'
-            + fmt.HTML_CSS + cover_css + '</style></head><body>' + ''.join(body) + '</body></html>'
-        )
+        html = memoir_export.render_html(self._export_data(project, include_chapters, include_bibliography),
+                                         cover_css, cover_html)
         response = HttpResponse(html, content_type='text/html; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="{safe_filename(project.title, "html")}"'
         return response
