@@ -310,9 +310,10 @@ class GenerationAccessTests(APITestCase):
         sections = list(chapter.children.order_by('order'))
         sections[0].content = 'Mon propre texte.'
         sections[0].save()
+        # Seule la section vide est demandée à l'IA (numérotée 1 dans la demande).
         self.create.return_value = fake_chat_completion(
             '### INTRODUCTION DU CHAPITRE\nCe chapitre présente...\n'
-            '### SECTION 1 — x\nNe doit pas écraser.\n### SECTION 2 — y\nRevue empirique rédigée.'
+            '### SECTION 1 — Revue empirique\nRevue empirique rédigée.'
         )
         res = self.client.post(f'/projects/chapters/{chapter.id}/generate_content/')
         self.assertEqual(res.status_code, 200, res.data)
@@ -324,6 +325,74 @@ class GenerationAccessTests(APITestCase):
         self.assertTrue(chapter.content.startswith('Ce chapitre'))
         prompt = self.create.call_args.kwargs['messages'][1]['content']
         self.assertIn('Revue empirique', prompt)  # titre de section du modèle transmis à l'IA
+        self.assertNotIn('### SECTION 2', prompt)  # la section déjà écrite n'est pas redemandée
+        self.assertIn('Mon propre texte.', prompt)  # mais elle est transmise pour la continuité
+
+    def test_truncated_answer_is_resumed_on_next_call(self):
+        """Réponse coupée après la 1re section : l'appel suivant ne demande que les sections restantes."""
+        from projects.models import Chapter
+        self.buy_and_apply()
+        chapter = Chapter.objects.get(project=self.project, title__startswith='Chapitre 4', parent=None)
+        sections = list(chapter.children.order_by('order'))
+        self.assertEqual(len(sections), 3)
+        self.create.return_value = fake_chat_completion(
+            '### INTRODUCTION DU CHAPITRE\nIntro.\n### SECTION 1 — Résultats\nRésultats rédigés.')
+        self.client.post(f'/projects/chapters/{chapter.id}/generate_content/')
+        self.create.return_value = fake_chat_completion(
+            '### SECTION 1 — Discussion\nDiscussion rédigée.\n### SECTION 2 — Recommandations\nRecommandations rédigées.')
+        res = self.client.post(f'/projects/chapters/{chapter.id}/generate_content/')
+        self.assertEqual(res.status_code, 200, res.data)
+        prompt = self.create.call_args.kwargs['messages'][1]['content']
+        self.assertNotIn('INTRODUCTION DU CHAPITRE', prompt)  # introduction déjà écrite
+        self.assertIn('Discussion', prompt)
+        for s in sections:
+            s.refresh_from_db()
+        self.assertEqual([s.content for s in sections],
+                         ['Résultats rédigés.', 'Discussion rédigée.', 'Recommandations rédigées.'])
+
+    def test_annexes_are_written_from_methodology(self):
+        from projects.models import Chapter
+        self.buy_and_apply()
+        Chapter.objects.filter(project=self.project, title__startswith='Chapitre 2', parent=None).update(
+            content="Enquête par questionnaire auprès de 120 usagers du mobile money à Bamako. " * 8)
+        annexes = Chapter.objects.get(project=self.project, title='Annexes')
+        self.create.return_value = fake_chat_completion(
+            'Annexe 1 : Questionnaire\n1. Utilisez-vous le mobile money ?\n\n'
+            'Annexe 2 : Organigramme\n[Document à insérer : organigramme de la structure]')
+        res = self.client.post(f'/projects/chapters/{annexes.id}/generate_content/')
+        self.assertEqual(res.status_code, 200, res.data)
+        annexes.refresh_from_db()
+        self.assertIn('Annexe 1 : Questionnaire', annexes.content)
+        self.assertIn('[Document à insérer', annexes.content)
+        self.assertIn('questionnaire', self.create.call_args.kwargs['messages'][1]['content'])
+
+    def test_tables_and_figures_list_is_written_from_text(self):
+        from projects.models import Chapter
+        self.buy_and_apply()
+        Chapter.objects.filter(project=self.project, title__startswith='Chapitre 4', parent=None).update(
+            content="Le Tableau 1 présente le profil des usagers du mobile money interrogés. " * 8)
+        liste = Chapter.objects.get(project=self.project, title='Liste des tableaux et figures')
+        self.create.return_value = fake_chat_completion(
+            '**Liste des tableaux**\nTableau 1 : Profil des usagers\n\n'
+            'Liste des figures\nFigure 1 : Évolution des transactions [à produire]')
+        res = self.client.post(f'/projects/chapters/{liste.id}/generate_content/')
+        self.assertEqual(res.status_code, 200, res.data)
+        liste.refresh_from_db()
+        self.assertTrue(liste.content.startswith('Liste des tableaux\nTableau 1 : Profil des usagers'))  # sans **
+        self.assertIn('Figure 1 : Évolution des transactions [à produire]', liste.content)
+        self.assertIn('Tableau 1 présente', self.create.call_args.kwargs['messages'][1]['content'])
+
+    def test_no_acronym_found_leaves_page_empty(self):
+        from projects.models import Chapter
+        self.buy_and_apply()
+        Chapter.objects.filter(project=self.project, title__startswith='Chapitre 1', parent=None).update(
+            content='Un texte sans aucun sigle particulier. ' * 20)
+        sigles = Chapter.objects.get(project=self.project, title='Sigles et abréviations')
+        self.create.return_value = fake_chat_completion('AUCUN')
+        res = self.client.post(f'/projects/chapters/{sigles.id}/generate_content/')
+        self.assertEqual(res.status_code, 400)
+        sigles.refresh_from_db()
+        self.assertNotIn('Aucun sigle', sigles.content or '')  # pas de faux contenu enregistré
 
     def test_dedication_and_acknowledgements_are_never_written(self):
         from projects.models import Chapter

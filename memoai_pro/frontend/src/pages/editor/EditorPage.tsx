@@ -26,10 +26,24 @@ const PLACEHOLDER = /^\s*(\[(Conseil du modèle|Sous-parties prévues)[^\]]*\]\s
 const isPlaceholder = (content: string | null) => !content || PLACEHOLDER.test(content);
 const normalize = (title: string) => title.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const isPersonalPage = (c: Chapter) => /dedicace|remerciement/.test(normalize(c.title));
-const isTextBasedPage = (c: Chapter) => c.type === 'preliminary' && /resume|abstract|sigle|abreviation/.test(normalize(c.title));
+/** Pages établies à partir du texte des chapitres : résumé, sigles, liste des tableaux et figures
+ *  (liminaires) et annexes (fin). */
+const isTextBasedPage = (c: Chapter) =>
+  (c.type === 'preliminary' && /resume|abstract|sigle|abreviation|tableau|figure/.test(normalize(c.title)))
+  || (c.type === 'back' && /annexe/.test(normalize(c.title)));
 
-/** Parties que l'IA peut rédiger, dans l'ordre : les chapitres d'abord, puis le résumé et les sigles
- *  (établis à partir du texte des chapitres). Jamais la dédicace ni les remerciements. */
+/** Une partie a-t-elle encore du contenu à rédiger (elle-même ou l'une de ses sections) ? */
+function needsWriting(chapters: Chapter[], id: number): boolean {
+  const part = chapters.find(c => c.id === id);
+  if (!part) return false;
+  if (isTextBasedPage(part)) return isPlaceholder(part.content);
+  return isPlaceholder(part.content) || chapters.some(c => c.parent === id && isPlaceholder(c.content));
+}
+
+const MAX_ATTEMPTS = 3; // une réponse de l'IA coupée avant la fin est reprise là où elle s'est arrêtée
+
+/** Parties que l'IA peut rédiger, dans l'ordre : les chapitres d'abord, puis le résumé, les sigles et les
+ *  annexes (établis à partir du texte des chapitres). Jamais la dédicace ni les remerciements. */
 export function aiWritingQueue(chapters: Chapter[]): Chapter[] {
   const top = chapters.filter(c => c.parent === null).sort((a, b) => a.order - b.order || a.id - b.id);
   const sections = (id: number) => chapters.filter(c => c.parent === id);
@@ -274,20 +288,29 @@ export default function EditorPage() {
     stopAi.current = false;
     let written = 0;
     const failed: string[] = [];
-    for (let i = 0; i < queue.length && !stopAi.current; i++) {
+    let fatal = false;
+    for (let i = 0; i < queue.length && !stopAi.current && !fatal; i++) {
       const part = queue[i];
-      setAiRun({ done: i, total: queue.length, current: part.title });
-      try {
-        const res = await chaptersApi.generateContent(part.id);
-        written += 1;
-        setChapters(res.chapters);
-        const shown = res.chapters.find(c => c.id === selectedIdRef.current);
-        if (shown && !dirtyRef.current) setDraft({ title: shown.title, content: shown.content ?? '' });
-      } catch (err) {
-        const status = err instanceof ApiError ? err.status : 0;
-        failed.push(`${part.title} : ${describeError(err, 'Rédaction impossible.')}`);
-        // Serveur injoignable, modèle non acheté, IA saturée ou indisponible : inutile de continuer.
-        if ([0, 402, 429, 503].includes(status)) break;
+      let complete = false;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS && !complete && !stopAi.current; attempt++) {
+        setAiRun({ done: i, total: queue.length, current: attempt === 1 ? part.title : `${part.title} (suite)` });
+        try {
+          const res = await chaptersApi.generateContent(part.id);
+          setChapters(res.chapters);
+          const shown = res.chapters.find(c => c.id === selectedIdRef.current);
+          if (shown && !dirtyRef.current) setDraft({ title: shown.title, content: shown.content ?? '' });
+          complete = !needsWriting(res.chapters, part.id);
+        } catch (err) {
+          const status = err instanceof ApiError ? err.status : 0;
+          failed.push(`${part.title} : ${describeError(err, 'Rédaction impossible.')}`);
+          // Serveur injoignable, modèle non acheté, IA saturée ou indisponible : inutile de continuer.
+          fatal = [0, 402, 429, 503].includes(status);
+          break;
+        }
+      }
+      if (complete) written += 1;
+      else if (!stopAi.current && !fatal && !failed.some(f => f.startsWith(`${part.title} :`))) {
+        failed.push(`${part.title} : rédaction incomplète, relancez le bouton pour terminer`);
       }
     }
     const stopped = stopAi.current;

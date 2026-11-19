@@ -146,7 +146,14 @@ def page_kind(chapter):
             return 'abstract'
         if 'sigle' in title or 'abreviation' in title:
             return 'acronyms'
+        if 'tableau' in title or 'figure' in title:
+            return 'figures'
+    if chapter.type == 'back' and 'annexe' in title:
+        return 'annexes'
     return None
+
+
+TEXT_BASED_PAGES = ('abstract', 'acronyms', 'figures', 'annexes')
 
 
 def written_text(project):
@@ -160,16 +167,24 @@ def written_text(project):
 
 
 def write_special_page(project, chapter, kind):
-    """Résumé (+ Abstract) ou liste des sigles, établis à partir des chapitres déjà rédigés."""
+    """Résumé (+ Abstract), liste des sigles, des tableaux et figures, ou annexes, établis à partir des chapitres déjà rédigés."""
     if not is_placeholder(chapter.content):
         raise ValidationError({'error': 'Cette page est déjà rédigée.'})
     text = written_text(project)
     if len(text) < 300:
         raise ValidationError({'error': "Rédigez d'abord les chapitres : cette page est établie à partir de votre texte."})
+    language = project.language or 'fr'
     if kind == 'abstract':
-        content = AIService.write_abstract(project_context(project), text[:15000], project.language or 'fr')
+        content = AIService.write_abstract(project_context(project), text[:15000], language)
+    elif kind == 'figures':
+        content = AIService.list_tables_figures(project_context(project), text[:20000], language)
+    elif kind == 'annexes':
+        content = AIService.write_annexes(project_context(project), guidance_of(chapter.content), text[:15000], language)
     else:
-        content = AIService.list_acronyms(text[:20000]) or 'Aucun sigle ni abréviation relevé dans le texte actuel.'
+        content = AIService.list_acronyms(text[:20000])
+        if not content.strip():
+            # La page reste vide (pas de faux contenu) : elle pourra être reprise une fois le texte enrichi.
+            raise ValidationError({'error': "Aucun sigle ni abréviation n'a été trouvé dans le texte actuel."})
     if not content.strip():
         raise ValidationError({'error': "L'IA n'a produit aucun contenu exploitable. Réessayez."})
     chapter.content = content
@@ -180,18 +195,20 @@ def write_special_page(project, chapter, kind):
 
 def write_chapter_content(project, chapter):
     """Rédige l'introduction et les sections encore vides d'un chapitre. Renvoie le nombre de blocs écrits.
-    Résumé et sigles : rédigés à partir du texte existant. Dédicace et remerciements : jamais."""
+    Résumé, sigles, liste des tableaux et figures et annexes : rédigés à partir du texte existant. Dédicace et remerciements : jamais.
+    Seules les parties encore vides sont envoyées à l'IA : si une réponse est coupée avant la fin,
+    un nouvel appel reprend exactement là où elle s'était arrêtée."""
     require_paid_template(project)
     if chapter.parent_id is not None:
         raise ValidationError({'error': 'Lancez la rédaction depuis le chapitre parent.'})
     kind = page_kind(chapter)
     if kind == 'personal':
         raise ValidationError({'error': 'La dédicace et les remerciements sont personnels : rédigez-les vous-même.'})
-    if kind in ('abstract', 'acronyms'):
+    if kind in TEXT_BASED_PAGES:
         return write_special_page(project, chapter, kind)
     if chapter.type in NON_GENERATED_TYPES:
-        raise ValidationError({'error': 'Cette page (dédicace, remerciements, résumé, bibliographie, annexes) '
-                                        'doit être rédigée par vous.'})
+        raise ValidationError({'error': 'Cette page (bibliographie, index) '
+                                        'doit être complétée par vous.'})
     sections = list(chapter.children.order_by('order', 'id'))
     if not needs_content(chapter):
         raise ValidationError({'error': 'Ce chapitre est déjà entièrement rédigé.'})
@@ -200,19 +217,27 @@ def write_chapter_content(project, chapter):
     blocks = max(sum(max(c.children.count(), 1) for c in generable_chapters(project)), 1)
     words = int(min(700, max(250, pages * 300 / blocks)))  # environ 300 mots par page
 
+    pending = [s for s in sections if is_placeholder(s.content)]
+    done = [s for s in sections if not is_placeholder(s.content)]
+    include_intro = is_placeholder(chapter.content)
+    already = '\n\n'.join(f"{s.title}\n{s.content.strip()}" for s in done)
+    if not include_intro:
+        already = f"Introduction du chapitre\n{chapter.content.strip()}\n\n{already}"
+
     result = AIService.write_chapter(
         project_context(project), chapter.title, guidance_of(chapter.content),
-        [(s.title, guidance_of(s.content)) for s in sections], words, project.language or 'fr',
+        [(s.title, guidance_of(s.content)) for s in pending], words, project.language or 'fr',
+        include_intro=include_intro, already_written=already.strip()[-6000:],
     )
 
     written = 0
     with transaction.atomic():
-        if is_placeholder(chapter.content) and result['intro']:
+        if include_intro and result['intro']:
             chapter.content = result['intro']
             chapter.version += 1
             chapter.save(update_fields=['content', 'version', 'updated_at'])
             written += 1
-        for number, section in enumerate(sections, start=1):
+        for number, section in enumerate(pending, start=1):
             text = result['sections'].get(number)
             if text and is_placeholder(section.content):
                 section.content = text

@@ -20,12 +20,15 @@ describe("Rédiger le mémoire avec l'IA", () => {
     const chap2 = ch('Chapitre 2 : Méthodologie', 'chapter', 'Intro écrite par moi.');
     ch('Modèle conceptuel', 'section', '[Sous-parties prévues : variables]', chap2.id);
     const biblio = ch('Bibliographie', 'back');
+    const annexes = ch('Annexes', 'back', "[Conseil du modèle : questionnaire, guide d'entretien]");
 
-    const queue = aiWritingQueue([dedicace, remerciements, resume, sigles, liste, intro, chap1, sec11, chap2, biblio]
+    const queue = aiWritingQueue([dedicace, remerciements, resume, sigles, liste, intro, chap1, sec11, chap2, biblio, annexes]
       .concat(ch('Modèle conceptuel', 'section', '', chap2.id)));
     const titles = queue.map(c => c.title);
 
-    expect(titles).toEqual(['Introduction générale', 'Chapitre 2 : Méthodologie', 'Résumé', 'Sigles et abréviations']);
+    expect(titles).toEqual(['Introduction générale', 'Chapitre 2 : Méthodologie', 'Résumé', 'Sigles et abréviations',
+      'Liste des tableaux et figures', 'Annexes']);
+    expect(titles).not.toContain('Bibliographie');
     expect(titles).not.toContain('Dédicace');
     expect(titles).not.toContain('Remerciements');
     expect(titles).not.toContain('Chapitre 1 : Revue de la littérature'); // entièrement rédigé

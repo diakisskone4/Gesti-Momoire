@@ -458,9 +458,12 @@ class AIService:
         return json.dumps(_clean_strings(plan), ensure_ascii=False)
 
     @staticmethod
-    def write_chapter(context, chapter_title, chapter_guidance, sections, words_per_section, language='fr'):
-        """Rédige un chapitre : introduction du chapitre puis chaque section.
-        `sections` : [(titre, consigne)]. Renvoie {'intro': str, 'sections': {numéro: str}}."""
+    def write_chapter(context, chapter_title, chapter_guidance, sections, words_per_section, language='fr',
+                      include_intro=True, already_written=''):
+        """Rédige un chapitre : introduction du chapitre (si `include_intro`) puis chaque section demandée.
+        `sections` : [(titre, consigne)] — seulement les sections encore vides lors d'une reprise.
+        `already_written` : sections déjà rédigées du chapitre, pour assurer la continuité.
+        Renvoie {'intro': str, 'sections': {numéro: str}} (numéros dans l'ordre de `sections`)."""
         lang = LANGUAGES.get(language, 'français')
         prompt = (
             f"Rédigez en {lang} le contenu du chapitre suivant d'un mémoire universitaire.\n"
@@ -469,10 +472,12 @@ class AIService:
         )
         if chapter_guidance:
             prompt += f"<consigne_chapitre>{chapter_guidance}</consigne_chapitre>\n"
-        prompt += (
-            "\nRespectez EXACTEMENT ce format, avec ces lignes de titre et rien d'autre autour :\n"
-            "### INTRODUCTION DU CHAPITRE\n(un paragraphe de 80 à 150 mots qui annonce le chapitre)\n"
-        )
+        if already_written:
+            prompt += (f"<deja_redige>{already_written}</deja_redige>\n"
+                       "Ces parties du chapitre sont déjà rédigées : ne les répétez pas, poursuivez dans leur continuité.\n")
+        prompt += "\nRespectez EXACTEMENT ce format, avec ces lignes de titre et rien d'autre autour :\n"
+        if include_intro:
+            prompt += "### INTRODUCTION DU CHAPITRE\n(un paragraphe de 80 à 150 mots qui annonce le chapitre)\n"
         for i, (title, hint) in enumerate(sections, start=1):
             prompt += f"### SECTION {i} — {title}" + (f" (consigne : {hint})" if hint else '') + "\n"
             prompt += f"(environ {words_per_section} mots)\n"
@@ -506,15 +511,54 @@ class AIService:
 
     @staticmethod
     def list_acronyms(text):
-        """Sigles et abréviations réellement employés dans le texte, avec leur signification."""
+        """Sigles et abréviations du mémoire : ceux employés dans le texte et ceux des organismes cités en toutes lettres."""
         result = clean_ai_text(_ask(
-            "Relevez tous les sigles et abréviations employés dans le texte ci-dessous. Écrivez une ligne par "
-            "sigle, au format « SIGLE : signification complète », par ordre alphabétique, sans autre texte. "
-            "Si la signification n'est pas certaine d'après le texte, ajoutez « [à vérifier] ». "
-            f"S'il n'y en a aucun, répondez seulement AUCUN.\n\n<texte>{text}</texte>",
+            "Établissez la liste des sigles et abréviations de ce mémoire. Relevez :\n"
+            "1. les sigles et abréviations employés dans le texte (ex. ONG, PIB, etc.) ;\n"
+            "2. les sigles officiels des organismes, institutions, programmes et notions cités en toutes lettres "
+            "(ex. « Banque centrale des États de l'Afrique de l'Ouest » donne BCEAO).\n"
+            "Écrivez une ligne par sigle, au format « SIGLE : signification complète », par ordre alphabétique, "
+            "sans autre texte. Si la signification n'est pas certaine, ajoutez « [à vérifier] ». "
+            f"S'il n'y en a vraiment aucun, répondez seulement AUCUN.\n\n<texte>{text}</texte>",
             openrouter_max_tokens=1500,
         ))
         return '' if result.strip().upper().rstrip('.') == 'AUCUN' else result
+
+    @staticmethod
+    def list_tables_figures(context, text, language='fr'):
+        """Liste des tableaux et figures : ceux du texte, complétés par ceux que le mémoire devrait comporter."""
+        lang = LANGUAGES.get(language, 'français')
+        prompt = (
+            f"Établissez en {lang} la liste des tableaux et figures du mémoire universitaire ci-dessous.\n"
+            f"<memoire>{context}</memoire>\n<texte>{text}</texte>\n\n"
+            "1. Relevez les tableaux et figures mentionnés dans le texte (« Tableau 1 », « Figure 2 », graphiques, "
+            "schémas, cartes, organigrammes) avec leur titre.\n"
+            "2. S'il y en a peu ou pas, proposez les tableaux et figures que ce mémoire devrait comporter d'après sa "
+            "méthodologie et ses résultats, en ajoutant « [à produire] » à la fin de leur ligne.\n\n"
+            "Format exact, sans aucune mise en forme Markdown ni autre texte :\n"
+            "Liste des tableaux\nTableau 1 : titre\nTableau 2 : titre\n\n"
+            "Liste des figures\nFigure 1 : titre\nFigure 2 : titre\n\n"
+            "Numérotez de façon continue dans chaque liste. N'inventez aucune donnée chiffrée."
+        )
+        return clean_ai_text(_ask(prompt, openrouter_max_tokens=1500))
+
+    @staticmethod
+    def write_annexes(context, guidance, text, language='fr'):
+        """Annexes rédigeables à partir de la méthodologie (questionnaire, guide d'entretien, grille...)."""
+        lang = LANGUAGES.get(language, 'français')
+        prompt = (
+            f"Rédigez en {lang} les annexes du mémoire universitaire ci-dessous.\n"
+            f"<memoire>{context}</memoire>\n"
+            + (f"<annexes_prevues>{guidance}</annexes_prevues>\n" if guidance else '')
+            + f"<texte>{text}</texte>\n\n"
+            "Pour chaque annexe utile au mémoire (questionnaire d'enquête, guide d'entretien, grille d'observation, "
+            "fiche de collecte...), écrivez une ligne « Annexe N : titre » puis son contenu complet et directement "
+            "utilisable (questions numérotées, rubriques, consignes), cohérent avec la méthodologie décrite dans le texte. "
+            "Pour les documents qui ne peuvent pas être rédigés (autorisations, documents internes, états financiers, "
+            "cartes, photos), écrivez seulement la ligne « Annexe N : titre » suivie de "
+            "« [Document à insérer : description] ». N'inventez aucun chiffre ni résultat."
+        )
+        return clean_ai_text(_ask(prompt, openrouter_max_tokens=5000, allow_truncated=True))
 
     @staticmethod
     def chat(message, project_id, user):
