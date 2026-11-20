@@ -48,8 +48,25 @@ export function wordCount(text?: string | null): number {
   return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
-/** Déclenche le téléchargement d'un Blob dans le navigateur. */
+/** Pont natif de l'application Android (APK) : enregistre un fichier dans « Téléchargements ». */
+interface AndroidBridge { saveFile(base64: string, filename: string, mimeType: string): void }
+
+function androidBridge(): AndroidBridge | undefined {
+  return (window as Window & { MemoAIAndroid?: AndroidBridge }).MemoAIAndroid;
+}
+
+/** Déclenche le téléchargement d'un Blob dans le navigateur (ou dans l'application Android). */
 export function downloadBlob(blob: Blob, filename: string): void {
+  const bridge = androidBridge();
+  if (bridge) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      bridge.saveFile(dataUrl.slice(dataUrl.indexOf(',') + 1), filename, blob.type || 'application/octet-stream');
+    };
+    reader.readAsDataURL(blob);
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

@@ -29,7 +29,8 @@ const isIOS = !!nav && (/iphone|ipad|ipod/i.test(nav.userAgent)
 function detectStandalone(): boolean {
   if (typeof window === 'undefined') return false;
   return window.matchMedia?.('(display-mode: standalone)').matches
-    || (nav as Navigator & { standalone?: boolean } | undefined)?.standalone === true;
+    || (nav as Navigator & { standalone?: boolean } | undefined)?.standalone === true
+    || /MemoAIAndroid/.test(nav?.userAgent ?? '');  // application Android (APK) : déjà installée
 }
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;

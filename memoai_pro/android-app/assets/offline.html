@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pas de connexion</title>
+<style>
+  html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Roboto,sans-serif;background:#f6f8fb;color:#0f2f2c}
+  @media (prefers-color-scheme:dark){html,body{background:#0f1724;color:#e2e8f0}.card{background:#172133!important}}
+  .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box}
+  .card{background:#fff;border-radius:22px;padding:32px 24px;text-align:center;max-width:360px;box-shadow:0 8px 30px rgba(15,23,42,.08)}
+  .icon{width:64px;height:64px;border-radius:20px;background:rgba(15,118,110,.12);display:grid;place-items:center;margin:0 auto 16px;font-size:30px}
+  h1{font-size:20px;margin:0 0 8px}p{margin:0 0 22px;line-height:1.5;opacity:.75;font-size:14.5px}
+  button{background:#0f766e;color:#fff;border:0;border-radius:14px;height:48px;width:100%;font-size:15px;font-weight:700}
+</style></head>
+<body><div class="wrap"><div class="card">
+  <div class="icon">📡</div>
+  <h1>Pas de connexion Internet</h1>
+  <p>MemoAI a besoin d'Internet pour charger vos mémoires. Vérifiez votre connexion puis réessayez.</p>
+  <button onclick="MemoAIAndroid.retry()">Réessayer</button>
+</div></div></body></html>
