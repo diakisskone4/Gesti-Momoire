@@ -2,7 +2,7 @@
 
 `cover_data()` rassemble les informations (projet réel ou exemple), `render_cover_html()`
 produit une page A4 autonome dans l'un des six styles. Le même rendu sert à l'aperçu
-dans le catalogue et à l'export HTML ; `cover_lines()` alimente les exports DOCX/PDF.
+dans le catalogue et à l'export HTML ; `cover_render.py` reproduit ce design dans les exports Word et PDF.
 """
 from html import escape
 
@@ -69,23 +69,6 @@ def cover_data(template, project=None, user=None):
     }
     data['diploma'] = diploma_line(project.level, data['field'])
     return data
-
-
-def cover_lines(data):
-    """Version texte de la page de garde (exports DOCX / PDF) : [(texte, rôle), ...]."""
-    lines = [(data['country'], 'header'), (data.get('motto', ''), 'motto'), (data['ministry'], 'small'),
-             (data['university'], 'header'), (data['faculty'], 'small'), (data['department'], 'small'),
-             ('', 'space'), (data['diploma'], 'diploma'), ('', 'space'), (data['title'], 'title'), ('', 'space'),
-             (f"Présenté par : {data['author']}", 'person')]
-    if data.get('supervisor'):
-        lines.append((f"Sous la direction de : {data['supervisor']}", 'person'))
-    if data.get('co_supervisor'):
-        lines.append((f"Co-encadrement : {data['co_supervisor']}", 'person'))
-    if data.get('jury'):
-        lines.append(('Membres du jury : ' + ' ; '.join(data['jury']), 'small'))
-    footer = ' — '.join(filter(None, [data.get('city'), f"Année universitaire {data['academic_year']}" if data.get('academic_year') else '']))
-    lines += [('', 'space'), (footer, 'footer')]
-    return [(text, role) for text, role in lines if text or role == 'space']
 
 
 DOC_CSS = "html,body{margin:0;padding:0;background:#e5e7eb}@media print{html,body{background:#fff}}"

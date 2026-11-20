@@ -241,15 +241,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
         outline = self._outline(project) if include_chapters else []
         refs = project.references.all().order_by('authors', 'year') if include_bibliography else []
         cover = self._cover(project)
-        cover_lines = None
-        if cover:
-            from modeles.covers import cover_lines as make_cover_lines
-            cover_lines = make_cover_lines(cover[1])
         ids = memoir_export.figure_ids(outline)
         images = {image.id: image for image in project.images.filter(id__in=ids)} if ids else {}
         return memoir_export.ExportData(
             project=project, parts=memoir_export.build_layout(outline),
-            references=[format_reference(r) for r in refs], cover_lines=cover_lines,
+            references=[format_reference(r) for r in refs], cover=cover,
             meta_lines=self._meta_lines(project), images=images,
         )
 

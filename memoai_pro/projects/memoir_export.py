@@ -131,7 +131,7 @@ class ExportData:
     project: object
     parts: list
     references: list            # références déjà mises en forme
-    cover_lines: list = None    # [(texte, rôle)] de la page de garde du modèle, ou None
+    cover: tuple = None         # (modèle, données) : page de garde du modèle utilisé, ou None
     meta_lines: list = field(default_factory=list)
     images: dict = field(default_factory=dict)
 
@@ -158,14 +158,9 @@ def render_docx(data):
     fmt.setup_docx(doc)
     figures = FigureNumbering()
 
-    sizes = {'title': 20, 'header': 13, 'diploma': 12, 'person': 12, 'footer': 12, 'motto': 10, 'small': 10}
-    if data.cover_lines:
-        for text, role in data.cover_lines:
-            if role == 'space':
-                fmt.centered_docx_paragraph(doc, '', 12, space_after_pt=12)
-                continue
-            fmt.centered_docx_paragraph(doc, text, sizes.get(role, 11), bold=role in ('title', 'header', 'footer'),
-                                        italic=role in ('motto', 'diploma'))
+    if data.cover:
+        from modeles.cover_render import add_docx_cover
+        add_docx_cover(doc, *data.cover)  # page de garde du modèle (même design que l'aperçu)
     else:
         fmt.centered_docx_paragraph(doc, '', 12, space_after_pt=150)
         fmt.centered_docx_paragraph(doc, data.project.title.upper(), 20, bold=True, space_after_pt=36)
@@ -306,15 +301,9 @@ def render_pdf(data):
                                                       leading=size * 1.35, alignment=TA_CENTER, spaceAfter=space_after))
 
     story = []
-    sizes = {'title': 20, 'header': 12, 'diploma': 12, 'person': 12, 'footer': 12, 'motto': 10, 'small': 10}
-    if data.cover_lines:
-        for text, role in data.cover_lines:
-            if role == 'space':
-                story.append(Spacer(1, 1.2 * cm))
-                continue
-            font = 'Times-Bold' if role in ('title', 'header', 'footer') else (
-                'Times-Italic' if role in ('motto', 'diploma') else 'Times-Roman')
-            story.append(centered(text, sizes.get(role, 11), font))
+    if data.cover:
+        from modeles.cover_render import pdf_cover_flowable
+        story.append(pdf_cover_flowable(*data.cover))  # page de garde du modèle (même design que l'aperçu)
     else:
         story.append(Spacer(1, 6 * cm))
         story.append(centered(data.project.title.upper(), 20, 'Times-Bold', space_after=36))

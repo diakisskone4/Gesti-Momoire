@@ -178,6 +178,48 @@ class TemplatePurchaseTests(APITestCase):
             res = self.client.post(f'/projects/projects/{project.id}/export/', {'format': fmt}, format='json')
             self.assertEqual(res.status_code, 200, fmt)
 
+    def test_word_and_pdf_use_the_template_cover_design(self):
+        """Word et PDF reprennent la page de garde du modèle (même design que l'aperçu), pour les 6 styles."""
+        from io import BytesIO
+
+        from docx import Document
+        from PyPDF2 import PdfReader
+        TemplatePurchase.objects.create(user=self.user, template=self.template, amount=5000, status='PAID')
+        project = Project.objects.create(user=self.user, title="Gestion de l'eau à Kayes", university='USTTB',
+                                         academic_year='2025-2026', city='Bamako', template=self.template)
+        Chapter.objects.create(project=project, title='Introduction générale', type='chapter', order=1, content='Texte.')
+
+        def export(fmt):
+            res = self.client.post(f'/projects/projects/{project.id}/export/', {'format': fmt}, format='json')
+            self.assertEqual(res.status_code, 200)
+            return b''.join(res.streaming_content) if hasattr(res, 'streaming_content') else res.content
+
+        for style in ('classique', 'moderne', 'elegant', 'these', 'minimaliste', 'institutionnel'):
+            self.template.cover_style = style
+            self.template.accent_color = '#7c2d12'
+            self.template.save()
+            with self.subTest(style=style):
+                doc = Document(BytesIO(export('docx')))
+                cover_xml = doc.sections[0]._sectPr.xml
+                body = doc.element.body.xml
+                first_section_text = []
+                for block in doc.element.body.iterchildren():
+                    first_section_text.append(''.join(block.itertext()))
+                    if block.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}sectPr') is not None:
+                        break
+                cover_text = ' '.join(first_section_text)
+                self.assertIn("GESTION DE L'EAU À KAYES", cover_text.upper())  # l'élégant l'affiche en petites capitales
+                self.assertIn('PRÉSENTÉ PAR', cover_text)
+                self.assertIn('Année universitaire 2025-2026', cover_text)
+                self.assertIn('7C2D12', body)  # couleur du modèle
+                if style == 'elegant':
+                    self.assertIn('w:pgBorders', cover_xml)  # double cadre de page
+                self.assertNotIn('PAGE', doc.sections[0].footer._element.xml)  # garde non numérotée
+
+                first_page = PdfReader(BytesIO(export('pdf'))).pages[0].extract_text()
+                self.assertIn('PRÉSENTÉ PAR', first_page)
+                self.assertIn('KAYES', first_page.upper())
+
     def _webhook(self, body, secret='whsec_test', ts=None):
         raw = json.dumps(body).encode()
         ts = str(ts or int(time.time()))
