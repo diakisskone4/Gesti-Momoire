@@ -82,7 +82,7 @@ export default function ProfilePage() {
   const fullName = user ? (`${user.first_name} ${user.last_name}`.trim() || user.email) : '';
 
   return (
-    <Layout>
+    <Layout onRefresh={load}>
       <div className="scope-profile">
         <div className="profile-page">
           <div className="page-header">
@@ -92,7 +92,7 @@ export default function ProfilePage() {
               <p className="subtitle">Gérez vos informations personnelles</p>
             </div>
             <div className="header-actions">
-              {!editMode && <button className="btn-secondary" onClick={load}>🔄 Rafraîchir</button>}
+              {!editMode && <button className="btn-secondary hide-mobile" onClick={load}>🔄 Rafraîchir</button>}
               {!editMode && user && <button className="btn-secondary" onClick={() => setEditMode(true)}>✏️ Modifier</button>}
               <button className="btn-danger" onClick={() => window.confirm('Êtes-vous sûr de vouloir vous déconnecter ?') && auth.logout()}>
                 🚪 Déconnexion

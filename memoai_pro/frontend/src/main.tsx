@@ -8,6 +8,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import './styles/global.css';
 import './styles/app.css';
+import './styles/mobile-app.css';
 import PwaPrompts from './pwa/PwaPrompts';
 import { initPwa } from './pwa/pwa';
 

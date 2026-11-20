@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArcElement, Chart, DoughnutController, Tooltip } from 'chart.js';
 import {
   AlertTriangle, ArrowRight, BookOpen, CheckCircle2, Circle, Clock, FilePlus2, FileText, GraduationCap,
-  LayoutTemplate, PenLine, RefreshCw, Send, Sparkles, Target, UserRound,
+  LayoutTemplate, PenLine, RefreshCw, Send, Sparkles, Target, Trash2, UserRound,
 } from 'lucide-react';
 
 import { describeError } from '../../api/client';
@@ -65,13 +65,13 @@ export default function DashboardPage() {
   const load = useCallback(() => {
     setLoading(true);
     setError('');
-    projectsApi.list('mine')
+    return projectsApi.list('mine')
       .then(setProjects)
       .catch(err => setError(describeError(err, 'Impossible de charger le tableau de bord.')))
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(load, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   const rows = useMemo(() => projects.map(p => ({ project: p, progress: projectProgress(p) })), [projects]);
   const current = rows[0];
@@ -118,7 +118,7 @@ export default function DashboardPage() {
   const today = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 
   return (
-    <Layout>
+    <Layout onRefresh={load}>
       <div className="scope-dash">
         <header className="dash-head">
           <div>
@@ -126,12 +126,20 @@ export default function DashboardPage() {
             <h1>{greeting()}, {user?.first_name || 'cher étudiant'}</h1>
             <p className="dash-sub">Suivez l'avancement de vos mémoires et reprenez là où vous vous êtes arrêté.</p>
           </div>
-          <div className="dash-actions">
+          <div className="dash-actions hide-mobile">
             <button className="dash-btn ghost" onClick={load} aria-label="Actualiser"><RefreshCw size={16} /> Actualiser</button>
             <Link className="dash-btn ghost" to="/modeles"><LayoutTemplate size={16} /> Modèles</Link>
             <Link className="dash-btn primary" to="/projects/new"><FilePlus2 size={16} /> Nouveau mémoire</Link>
           </div>
         </header>
+
+        {/* Téléphone : raccourcis en tuiles, comme l'écran d'accueil d'une application. */}
+        <nav className="quick-actions show-mobile" aria-label="Raccourcis">
+          <Link to="/projects/new" className="qa primary"><span><FilePlus2 size={20} /></span>Nouveau</Link>
+          <Link to="/modeles" className="qa"><span><LayoutTemplate size={20} /></span>Modèles</Link>
+          <Link to="/assistant" className="qa"><span><Sparkles size={20} /></span>Assistant</Link>
+          <Link to="/corbeille" className="qa"><span><Trash2 size={20} /></span>Corbeille</Link>
+        </nav>
 
         {loading && <div className="dash-state"><span className="dash-spinner" /> Chargement du tableau de bord…</div>}
         {error && !loading && (
@@ -216,7 +224,29 @@ export default function DashboardPage() {
                     <h2 className="card-title">Mes mémoires</h2>
                     <Link to="/projects" className="link">Tout voir <ArrowRight size={14} /></Link>
                   </div>
-                  <div className="table-scroll">
+                  {/* Téléphone : chaque mémoire est un widget (titre, statut, avancement). */}
+                  <ul className="memo-widgets show-mobile">
+                    {rows.slice(0, 6).map(({ project: p, progress }) => (
+                      <li key={p.id}>
+                        <Link to={`/projects/${p.id}/editor`} className="memo-widget">
+                          <span className="mw-icon"><FileText size={18} /></span>
+                          <span className="mw-body">
+                            <strong>{p.title}</strong>
+                            <span className="mw-meta">
+                              <span className={`pill ${p.status}`}>{PROJECT_STATUS_LABELS[p.status]}</span>
+                              <small>{formatDate(p.updated_at)}</small>
+                            </span>
+                            <span className="mw-progress">
+                              <span className="bar small"><i style={{ width: `${progress.percent}%` }} /></span>
+                              <small>{progress.percent} %</small>
+                            </span>
+                          </span>
+                          <ArrowRight size={16} className="mw-go" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="table-scroll hide-mobile">
                     <table className="dash-table">
                       <thead>
                         <tr><th>Mémoire</th><th>Statut</th><th>Avancement</th><th className="num">Chapitres</th><th>Modifié</th><th /></tr>

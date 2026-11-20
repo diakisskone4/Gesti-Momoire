@@ -91,7 +91,7 @@ export default function TrashPage() {
   const count = (kind: TrashKind) => items.filter(i => i.kind === kind).length;
 
   return (
-    <Layout>
+    <Layout onRefresh={load}>
       <div className="scope-projects scope-trash">
         <div className="projects-page">
           <div className="page-header">
@@ -103,7 +103,7 @@ export default function TrashPage() {
               </p>
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button className="btn-secondary" onClick={load} disabled={loading}>🔄 Rafraîchir</button>
+              <button className="btn-secondary hide-mobile" onClick={load} disabled={loading}>🔄 Rafraîchir</button>
               <button className="btn-danger-outline" onClick={empty} disabled={!items.length || busy !== null}>
                 <Trash2 size={16} aria-hidden="true" /> Vider la corbeille
               </button>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import PullToRefresh from './PullToRefresh';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
   Bell, BookOpen, FilePlus2, LayoutDashboard, LayoutTemplate, LogOut, Menu, Moon, Scale, ShieldCheck, Sparkles, Sun,
@@ -41,7 +42,8 @@ const HEADLINES: Record<string, string> = {
   ADMIN: 'Supervisez la plateforme MemoAI Pro.',
 };
 
-export default function Layout({ children }: { children: ReactNode }) {
+/** `onRefresh` : sur téléphone, tirer la page vers le bas recharge ses données (comme une application). */
+export default function Layout({ children, onRefresh }: { children: ReactNode; onRefresh?: () => unknown }) {
   const { user, logout, homeRoute } = useAuth();
   const { isDark, toggle } = useTheme();
   const location = useLocation();
@@ -166,7 +168,10 @@ export default function Layout({ children }: { children: ReactNode }) {
             </div>
           </header>
 
-          <section className="layout-content">{children}</section>
+          <section className="layout-content">
+            {onRefresh && <PullToRefresh onRefresh={onRefresh} />}
+            <div className="page-enter" key={location.pathname}>{children}</div>
+          </section>
         </main>
 
         <nav className="bottom-nav" aria-label="Navigation rapide">

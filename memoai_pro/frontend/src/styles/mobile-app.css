@@ -1,0 +1,263 @@
+/*
+ * Expérience « application mobile » : sur téléphone, chaque donnée est un widget
+ * (cartes arrondies, tuiles, listes tactiles), sans tableau ni mise en page de site web.
+ * L'affichage sur ordinateur n'est pas modifié.
+ */
+
+/* Visible uniquement sur téléphone / uniquement sur grand écran */
+.show-mobile { display: none !important; }
+
+/* Ressenti tactile d'une application (tous écrans tactiles) */
+@media (hover: none) and (pointer: coarse) {
+  html { -webkit-tap-highlight-color: transparent; }
+  button, a, [role='tab'], [role='link'], .tab, .qa, .memo-widget {
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  button:active:not(:disabled), a:active, [role='link']:active, .memo-widget:active, .qa:active {
+    transform: scale(0.97);
+    transition: transform 0.08s ease;
+  }
+}
+html.has-ptr { overscroll-behavior-y: contain; }
+
+/* Entrée de page en fondu, comme le changement d'écran d'une application */
+.page-enter { animation: page-in 0.22s ease-out both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .page-enter { animation: none; } }
+
+/* Tirer pour actualiser */
+.ptr {
+  display: flex; align-items: center; justify-content: center; gap: 8px; overflow: hidden;
+  color: var(--text-muted); font-size: 12.5px; font-weight: 600; transition: height 0.15s ease;
+}
+.ptr-icon {
+  width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--bg-card); color: #0f766e; box-shadow: 0 3px 12px rgba(15, 118, 110, 0.18);
+}
+.ptr.ready .ptr-icon { background: #0f766e; color: #fff; }
+.ptr.busy .ptr-icon { animation: ptr-spin 0.8s linear infinite; }
+@keyframes ptr-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 640px) {
+  :root .show-mobile { display: revert !important; }
+  :root .hide-mobile { display: none !important; }
+  :root .layout-content { overflow-x: clip; }
+
+  /* ---------- En-têtes de page : titre d'application, sans texte de site web ---------- */
+  :root .scope-dash .dash-sub, :root .scope-projects .page-header .subtitle, :root .scope-projects .page-header .eyebrow, :root .scope-profile .page-header .subtitle, :root .scope-profile .page-header .eyebrow, :root .scope-ws .ws-head p, :root .scope-ws .ws-head .eyebrow, :root .scope-create .eyebrow { display: none; }
+
+  :root .scope-projects .page-header, :root .scope-profile .page-header, :root .scope-ws .ws-head {
+    display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 4px; flex-wrap: nowrap;
+  }
+  :root .scope-projects .page-header h1, :root .scope-profile .page-header h1, :root .scope-ws .ws-head h2 {
+    font-size: 25px; margin: 0; letter-spacing: -0.02em; line-height: 1.15;
+  }
+  :root .scope-projects .page-header > div:last-child:not(:first-child), :root .scope-profile .header-actions { flex: none; }
+
+  /* ---------- Widgets : base commune ---------- */
+  :root .scope-dash .card, :root .scope-dash .kpi, :root .scope-projects .project-card, :root .scope-ws .card, :root .scope-ws .stat, :root .scope-ws .panel, :root .scope-profile .profile-card, :root .scope-trash .trash-item {
+    border-radius: 20px;
+    border-color: transparent;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 20px rgba(15, 23, 42, 0.06);
+  }
+
+  /* ---------- Tableau de bord ---------- */
+  :root .scope-dash .dash-head { margin-bottom: 4px; }
+  :root .scope-dash .dash-head h1 { font-size: 24px; line-height: 1.2; }
+  :root .scope-dash .dash-date { font-size: 12px; text-transform: capitalize; }
+
+  :root .quick-actions {
+    display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 6px 0 16px;
+  }
+  :root .qa {
+    display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 12px 4px 10px;
+    border-radius: 18px; background: var(--bg-card); color: var(--text-primary); text-decoration: none;
+    font-size: 11.5px; font-weight: 700; box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 6px 18px rgba(15, 23, 42, .06);
+  }
+  :root .qa span {
+    width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center;
+    background: rgba(15, 118, 110, 0.1); color: #0f766e;
+  }
+  :root .qa.primary span { background: linear-gradient(135deg, #0f766e, #14b8a6); color: #fff; box-shadow: 0 6px 14px rgba(15, 118, 110, .35); }
+
+  :root .scope-dash .kpis { gap: 10px; }
+  :root .scope-dash .kpi { padding: 14px; gap: 6px; min-height: 0; }
+  :root .scope-dash .kpi-label { font-size: 11.5px; }
+  :root .scope-dash .kpi-value { font-size: 24px; }
+  :root .scope-dash .kpi-foot { font-size: 11px; }
+  :root .scope-dash .kpi-icon { width: 30px; height: 30px; }
+
+  :root .scope-dash .dash-grid, :root .scope-dash .dash-main, :root .scope-dash .dash-side { gap: 14px; }
+  :root .scope-dash .dash-side { display: flex; flex-direction: column; }
+  :root .scope-dash .card { padding: 16px; }
+  :root .scope-dash .card.focus { background: linear-gradient(160deg, #0f766e 0%, #0b5f58 100%); color: #e6fffa; border-top: 0; }
+  :root .scope-dash .card.focus h2, :root .scope-dash .card.focus strong { color: #fff; }
+  :root .scope-dash .card.focus .muted, :root .scope-dash .card.focus small, :root .scope-dash .card.focus .label, :root .scope-dash .card.focus .card-kicker { color: rgba(230, 255, 250, 0.78); }
+  :root .scope-dash .card.focus .bar { background: rgba(255, 255, 255, 0.2); }
+  :root .scope-dash .card.focus .bar i { background: #5eead4; }
+  :root .scope-dash .card.focus .focus-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; border-color: rgba(255, 255, 255, .15); }
+  :root .scope-dash .card.focus .focus-stats > div:first-child { grid-column: 1 / -1; }
+  :root .scope-dash .card.focus .focus-foot { flex-direction: column; align-items: stretch; gap: 10px; border-color: rgba(255, 255, 255, .15); }
+  :root .scope-dash .card.focus .dash-btn.primary { background: #fff; color: #0f766e; justify-content: center; height: 46px; border-radius: 14px; }
+  :root .scope-dash .card.focus .pill { background: rgba(255, 255, 255, 0.18); color: #fff; }
+
+  :root .memo-widgets { list-style: none; margin: 4px 0 0; padding: 0; display: flex !important; flex-direction: column; gap: 10px; }
+  :root .memo-widget {
+    display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px;
+    background: var(--bg-hover); color: inherit; text-decoration: none;
+  }
+  :root .mw-icon { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: rgba(15, 118, 110, .12); color: #0f766e; }
+  :root .mw-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  :root .mw-body strong { font-size: 14px; color: var(--text-primary); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  :root .mw-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  :root .mw-meta small, :root .mw-progress small { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  :root .mw-progress { display: flex; align-items: center; gap: 8px; }
+  :root .mw-progress .bar { flex: 1; }
+  :root .mw-go { flex: none; color: var(--text-muted); }
+
+  :root .scope-dash .steps li { padding: 10px 0; }
+  :root .scope-dash .donut { max-width: 190px; margin-inline: auto; }
+
+  /* ---------- Mes mémoires ---------- */
+  :root .scope-projects .search-bar { position: sticky; top: calc(58px + var(--safe-top, 0px)); z-index: 5; background: var(--bg-primary, #f6f8fb); padding: 8px 0; margin: 0 0 4px; flex-wrap: wrap; gap: 8px; }
+  :root .scope-projects .search-input-wrapper { flex: 1 1 100%; }
+  :root .scope-projects .search-input { border-radius: 14px; height: 46px; }
+  :root .scope-projects .projects-grid { grid-template-columns: 1fr; gap: 12px; }
+  :root .scope-projects .project-card { padding: 16px; }
+  :root .scope-projects .project-card h3 { font-size: 16.5px; }
+  :root .scope-projects .card-buttons { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  :root .scope-projects .card-buttons .btn-small { padding: 9px 12px; border-radius: 12px; font-size: 12.5px; }
+
+  /* ---------- Espaces encadreur / jury / admin / modèles / assistant ---------- */
+  :root .scope-ws .ws { gap: 14px; }
+  :root .scope-ws .tabs {
+    flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    margin: 0; padding: 2px 0;
+    scroll-snap-type: x proximity;
+  }
+  :root .scope-ws .tabs::-webkit-scrollbar { display: none; }
+  :root .scope-ws .tab {
+    flex: none; white-space: nowrap; scroll-snap-align: start; padding: 0 16px; height: 38px; min-height: 0;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  :root .scope-ws .tabs .tab { flex-direction: row; justify-content: center; flex-wrap: nowrap; }
+  :root .scope-ws .tab .count { display: inline; margin-left: 2px; }
+  :root .scope-ws .toolbar { flex-direction: column; align-items: stretch; }
+  :root .scope-ws .toolbar > *:not(.tabs) { width: 100%; max-width: 100%; box-sizing: border-box; }
+  :root .scope-ws .toolbar > div:not(.tabs) { display: flex; flex-direction: column; gap: 8px; }
+  :root .scope-ws .toolbar select, :root .scope-ws .toolbar .btn { width: 100%; max-width: 100%; box-sizing: border-box; min-height: 46px; border-radius: 14px; justify-content: center; }
+  :root .scope-ws .search { min-width: 0; width: 100%; box-sizing: border-box; border-radius: 14px; height: 46px; }
+  :root .scope-ws .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  :root .scope-ws .stat { padding: 14px; }
+  :root .scope-ws .stat strong { font-size: 22px; }
+  :root .scope-ws .cards { grid-template-columns: 1fr; gap: 12px; }
+  :root .scope-ws .card { padding: 16px; }
+
+  /* Tableaux → une carte par ligne */
+  :root table.cards-mobile, :root table.cards-mobile tbody, :root table.cards-mobile tr, :root table.cards-mobile td { display: block; width: 100%; }
+  :root table.cards-mobile thead { display: none; }
+  :root table.cards-mobile tr {
+    position: relative; margin: 0 0 10px; padding: 12px 14px; border-radius: 18px; background: var(--bg-card);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 6px 18px rgba(15, 23, 42, .06);
+  }
+  :root table.cards-mobile td {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border: 0;
+    text-align: right; font-size: 13px;
+  }
+  :root table.cards-mobile td[data-label]::before {
+    content: attr(data-label); flex: none; font-size: 12px; font-weight: 600; color: var(--text-muted); text-align: left;
+  }
+  :root table.cards-mobile td.cell-title { display: block; text-align: left; font-size: 15px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); margin-bottom: 4px; }
+  :root table.cards-mobile td.cell-title::before { display: none; }
+  :root table.cards-mobile td.cell-actions { justify-content: flex-end; padding-top: 10px; }
+  :root table.cards-mobile td.cell-actions:empty { display: none; }
+  :root table.cards-mobile td select { max-width: 60%; }
+  :root .table-wrap:has(table.cards-mobile) { border: 0 !important; background: none !important; box-shadow: none !important; overflow: visible; }
+
+  /* ---------- Profil : écran de réglages ---------- */
+  :root .scope-profile .header-actions .btn-secondary, :root .scope-profile .header-actions .btn-danger {
+    padding: 8px 12px; min-height: 38px; font-size: 13px; border-radius: 12px;
+  }
+  :root .scope-profile .profile-card { padding: 18px 16px; }
+  :root .scope-profile .profile-avatar {
+    background: linear-gradient(160deg, #0f766e, #0b5f58); color: #fff; border-radius: 18px; padding: 20px 16px;
+    margin: -4px -2px 18px; border: 0;
+  }
+  :root .scope-profile .profile-avatar h2 { color: #fff; }
+  :root .scope-profile .profile-avatar .avatar-email { color: rgba(230, 255, 250, .8); }
+  :root .scope-profile .profile-avatar .avatar-role { background: rgba(255, 255, 255, .18); color: #fff; }
+  :root .scope-profile .profile-avatar .avatar-circle { background: #fff; color: #0f766e; }
+  :root .scope-profile .profile-avatar .avatar-text { color: #0f766e; }
+  :root .scope-profile .form-section { background: var(--bg-hover); border-radius: 16px; padding: 14px; margin-bottom: 14px; border: 0; }
+  :root .scope-profile .form-section h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin: 0 0 10px; }
+  :root .scope-profile .form-row { grid-template-columns: 1fr; gap: 0; }
+  :root .scope-profile .form-group input, :root .scope-profile .form-group select { border-radius: 12px; min-height: 46px; background: var(--bg-card); }
+
+  /* ---------- Corbeille ---------- */
+  :root .scope-trash .trash-filters { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: 0; padding: 2px 0; }
+  :root .scope-trash .trash-filters::-webkit-scrollbar { display: none; }
+  :root .scope-trash .trash-filters button { flex: none; white-space: nowrap; }
+  :root .scope-trash .trash-actions .btn-small { flex: 1; justify-content: center; padding: 9px; border-radius: 12px; }
+
+  /* ---------- Fenêtres : feuilles qui montent du bas, comme sur mobile ---------- */
+  :root .modal-overlay, :root .modal-backdrop { align-items: flex-end !important; padding: 0 !important; }
+  :root .modal-overlay > .modal, :root .modal-backdrop > .modal, :root .modal-overlay > [role='dialog'], :root .modal-backdrop > [role='dialog'] {
+    width: 100% !important; max-width: none !important; max-height: 92vh; margin: 0 !important;
+    border-radius: 22px 22px 0 0 !important; padding-bottom: calc(16px + var(--safe-bottom, 0px));
+    animation: sheet-up 0.24s ease-out both;
+  }
+  @keyframes sheet-up { from { transform: translateY(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+}
+
+/* Thème sombre : ombres plus discrètes, dégradés conservés */
+@media (max-width: 640px) {
+  :root.dark-theme .qa, :root.dark-theme table.cards-mobile tr, :root.dark-theme .scope-dash .card, :root.dark-theme .scope-projects .project-card, :root.dark-theme .scope-ws .card { box-shadow: 0 1px 0 rgba(255, 255, 255, .04); border-color: var(--border-color); }
+}
+
+@media (max-width: 640px) {
+  /* Modèles : vignette de la page de garde à gauche, informations à droite (widget compact) */
+  :root .tpl-grid { grid-template-columns: 1fr; gap: 12px; }
+  :root .tpl-card {
+    display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: stretch; border-radius: 20px; border-color: transparent;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04), 0 6px 20px rgba(15, 23, 42, .06); overflow: hidden;
+  }
+  :root .tpl-cover { padding: 12px 0 12px 12px; height: 100%; display: flex; align-items: flex-start; }
+  :root .tpl-cover .cover-frame { border-radius: 4px; }
+  :root .tpl-owned { top: 6px; left: 6px; right: auto; font-size: 9.5px; padding: 3px 7px; }
+  :root .tpl-body { padding: 12px 14px 14px; gap: 5px; }
+  :root .tpl-body h3 { font-size: 14.5px; line-height: 1.3; }
+  :root .tpl-body .theme { font-size: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  :root .tpl-body .meta .badge:nth-child(2), :root .tpl-domain { display: none; }
+  :root .tpl-footer { flex-direction: column; align-items: stretch; gap: 8px; }
+  :root .tpl-price { font-size: 16px; }
+  :root .tpl-footer .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  :root .tpl-footer .btn { padding: 8px 6px; font-size: 12px; border-radius: 10px; text-align: center; justify-content: center; }
+
+  /* Profil : nom lisible sur l'en-tête vert */
+  :root .scope-profile .profile-avatar .avatar-info h2 { color: #fff; }
+  :root .scope-profile .form-section h3 { font-size: 12px; letter-spacing: .08em; }
+  :root .scope-profile .page-header { flex-wrap: wrap; }
+
+  /* Mes mémoires : pas d'espace vide sous le titre */
+  :root .scope-projects .page-header { margin-bottom: 0; min-height: 0; }
+  :root .scope-projects .page-header > div:last-child:not(:first-child) { display: none; }
+  :root .scope-projects .projects-page { gap: 10px; }
+
+  /* Widgets du tableau de bord : barre de progression sur toute la largeur */
+  :root .mw-progress .bar { width: auto; min-width: 0; }
+}
+
+/* Outils de l'éditeur : icône + libellé */
+.scope-editor .editor-tools button.secondary { display: inline-flex; align-items: center; gap: 7px; }
+@media (max-width: 640px) {
+  :root .scope-editor .editor-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  :root .scope-editor .editor-tools button.secondary {
+    flex-direction: column; justify-content: center; gap: 6px; padding: 12px 4px; min-height: 72px;
+    border-radius: 16px; font-size: 12px; line-height: 1.2; text-align: center;
+  }
+  :root .scope-editor .editor-tools button.secondary svg { color: #0f766e; }
+  :root .scope-editor .editor-tools button.primary { grid-column: 1 / -1; min-height: 48px; border-radius: 14px; }
+}

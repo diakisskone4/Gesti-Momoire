@@ -65,7 +65,7 @@ export default function ProjectsPage() {
     .catch(err => fail(err, 'Impossible de restaurer le mémoire.'));
 
   return (
-    <Layout>
+    <Layout onRefresh={load}>
       <div className="scope-projects">
         <div className="projects-page">
           <div className="page-header">
@@ -75,8 +75,8 @@ export default function ProjectsPage() {
               <p className="subtitle">Gérez tous vos mémoires et projets de recherche</p>
             </div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button className="btn-secondary" onClick={load}>🔄 Rafraîchir</button>
-              <button className="btn-primary" onClick={() => navigate('/projects/new')}>+ Nouveau mémoire</button>
+              <button className="btn-secondary hide-mobile" onClick={load}>🔄 Rafraîchir</button>
+              <button className="btn-primary hide-mobile" onClick={() => navigate('/projects/new')}>+ Nouveau mémoire</button>
             </div>
           </div>
 

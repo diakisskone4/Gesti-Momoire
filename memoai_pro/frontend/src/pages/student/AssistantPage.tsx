@@ -118,7 +118,7 @@ export default function AssistantPage() {
               <button className="btn primary" disabled={loading || !input.trim()} onClick={run}>
                 {loading ? 'Génération…' : <><Sparkles size={15} /> Lancer</>}
               </button>
-              <span className="muted" style={{ fontSize: 12 }}>Ctrl+Entrée</span>
+              <span className="muted hide-mobile" style={{ fontSize: 12 }}>Ctrl+Entrée</span>
             </div>
           </section>
 

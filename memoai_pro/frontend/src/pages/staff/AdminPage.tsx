@@ -83,7 +83,7 @@ export default function AdminPage() {
   };
 
   return (
-    <Layout>
+    <Layout onRefresh={() => { loadStats(); loadUsers(); }}>
       <div className="scope-ws">
         <div className="ws">
           <div className="ws-head">
@@ -92,7 +92,7 @@ export default function AdminPage() {
               <h2>Tableau de bord de la plateforme</h2>
               <p>Utilisateurs, mémoires, paiements et usage de l'IA.</p>
             </div>
-            <button className="btn" onClick={() => { loadStats(); loadUsers(); }}>↻ Actualiser</button>
+            <button className="btn hide-mobile" onClick={() => { loadStats(); loadUsers(); }}>↻ Actualiser</button>
           </div>
 
           {stats && (
@@ -152,7 +152,7 @@ export default function AdminPage() {
           {message && <div className="ok">{message}</div>}
 
           <div className="table-wrap">
-            <table>
+            <table className="cards-mobile">
               <thead>
                 <tr><th>Utilisateur</th><th>Rôle</th><th>Établissement</th><th className="num">Mémoires</th><th>Inscrit le</th><th>Statut</th><th /></tr>
               </thead>
@@ -161,18 +161,18 @@ export default function AdminPage() {
                 {!loadingUsers && !users.length && <tr><td colSpan={7} className="muted">Aucun utilisateur.</td></tr>}
                 {!loadingUsers && users.map(u => (
                   <tr key={u.id}>
-                    <td><strong style={{ color: 'var(--text-primary)' }}>{u.full_name}</strong><br /><span className="muted">{u.email}</span></td>
-                    <td>
+                    <td data-label="Utilisateur" className="cell-title"><strong style={{ color: 'var(--text-primary)' }}>{u.full_name}</strong><br /><span className="muted">{u.email}</span></td>
+                    <td data-label="Rôle">
                       <select value={u.role} disabled={u.id === me?.id} aria-label={`Rôle de ${u.full_name}`}
                               onChange={e => changeRole(u, e.target.value as RoleCode)}>
                         {ROLES.map(r => <option key={r.code} value={r.code}>{r.label}</option>)}
                       </select>
                     </td>
-                    <td>{u.university || '—'}<br /><span className="muted">{u.academic_title || (u.level ? LEVEL_LABELS[u.level] : '')}</span></td>
-                    <td className="num">{u.projects_count}</td>
-                    <td>{formatDate(u.created_at)}</td>
-                    <td><span className={`badge ${u.is_active ? 'VALIDATED' : 'ARCHIVED'}`}>{u.is_active ? 'Actif' : 'Suspendu'}</span></td>
-                    <td style={{ whiteSpace: 'nowrap' }}>
+                    <td data-label="Établissement">{u.university || '—'}<br /><span className="muted">{u.academic_title || (u.level ? LEVEL_LABELS[u.level] : '')}</span></td>
+                    <td className="num" data-label="Mémoires">{u.projects_count}</td>
+                    <td data-label="Inscrit le">{formatDate(u.created_at)}</td>
+                    <td data-label="Statut"><span className={`badge ${u.is_active ? 'VALIDATED' : 'ARCHIVED'}`}>{u.is_active ? 'Actif' : 'Suspendu'}</span></td>
+                    <td className="cell-actions" style={{ whiteSpace: 'nowrap' }}>
                       {u.id === me?.id ? <span className="muted">vous</span> : (
                         <>
                           <button className={`btn${u.is_active ? ' warn' : ''}`} onClick={() => toggleActive(u)}>

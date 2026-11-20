@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { BookMarked, Download, FileText, MessageSquare, Settings, Users } from 'lucide-react';
 
 import { ApiError, describeError } from '../../api/client';
 import { chaptersApi, projectsApi } from '../../api/services';
@@ -363,13 +364,13 @@ export default function EditorPage() {
                   {project.template_detail && <> · Modèle : {project.template_detail.name}</>}
                 </p>
               </div>
-              <div className="actions">
-                <button type="button" className="secondary" onClick={() => setModal('cover')}>📄 Page de garde</button>
-                <button type="button" className="secondary" onClick={() => setModal('settings')}>⚙ Paramètres</button>
-                <button type="button" className="secondary" onClick={() => setModal('comments')}>💬 Commentaires</button>
-                <button type="button" className="secondary" onClick={() => setModal('collaboration')}>👥 Collaborer</button>
-                <button type="button" className="secondary" onClick={() => setModal('references')}>📚 Bibliographie</button>
-                <button type="button" className="secondary" onClick={() => setModal('export')}>📥 Exporter</button>
+              <div className="actions editor-tools">
+                <button type="button" className="secondary" onClick={() => setModal('cover')}><FileText size={17} /><span>Page de garde</span></button>
+                <button type="button" className="secondary" onClick={() => setModal('settings')}><Settings size={17} /><span>Paramètres</span></button>
+                <button type="button" className="secondary" onClick={() => setModal('comments')}><MessageSquare size={17} /><span>Commentaires</span></button>
+                <button type="button" className="secondary" onClick={() => setModal('collaboration')}><Users size={17} /><span>Collaborer</span></button>
+                <button type="button" className="secondary" onClick={() => setModal('references')}><BookMarked size={17} /><span>Bibliographie</span></button>
+                <button type="button" className="secondary" onClick={() => setModal('export')}><Download size={17} /><span>Exporter</span></button>
                 {canGeneratePlan && (
                   <button type="button" className="primary" disabled={generating || !!aiRun} onClick={generatePlan}>
                     {generating ? 'Génération…' : '✦ Générer le plan avec IA'}

@@ -120,7 +120,7 @@ export default function TemplatesPage() {
   const paidSample = templates?.find(t => !t.is_free);
 
   return (
-    <Layout>
+    <Layout onRefresh={load}>
       <div className="scope-ws">
         <div className="ws">
           <div className="ws-head">
@@ -131,7 +131,7 @@ export default function TemplatesPage() {
                 {templates?.some(t => t.is_free) && ' Un modèle est offert gratuitement.'} Les autres s'achètent une seule fois
                 {paidSample ? ` (${formatPrice(paidSample.price, paidSample.currency)})` : ''} et s'utilisent sur tous vos mémoires.</p>
             </div>
-            <button className="btn" onClick={load}>↻ Actualiser</button>
+            <button className="btn hide-mobile" onClick={load}>↻ Actualiser</button>
           </div>
 
           {returnState && (
@@ -201,17 +201,17 @@ export default function TemplatesPage() {
             <section className="panel">
               <h3>Mes achats</h3>
               <div className="table-wrap" style={{ border: 0 }}>
-                <table>
+                <table className="cards-mobile">
                   <thead><tr><th>Modèle</th><th>Date</th><th className="num">Montant</th><th>Statut</th><th /></tr></thead>
                   <tbody>
                     {purchases.map(p => (
                       <tr key={p.id}>
-                        <td>{p.template_name}</td>
-                        <td>{formatDate(p.paid_at ?? p.created_at)}</td>
-                        <td className="num">{formatPrice(p.amount_charged ?? p.amount, p.currency)}</td>
-                        <td><span className={`badge ${p.status === 'PAID' ? 'VALIDATED' : p.status === 'PENDING' ? 'DRAFT' : 'ARCHIVED'}`}>
+                        <td className="cell-title" data-label="Modèle">{p.template_name}</td>
+                        <td data-label="Date">{formatDate(p.paid_at ?? p.created_at)}</td>
+                        <td className="num" data-label="Montant">{formatPrice(p.amount_charged ?? p.amount, p.currency)}</td>
+                        <td data-label="Statut"><span className={`badge ${p.status === 'PAID' ? 'VALIDATED' : p.status === 'PENDING' ? 'DRAFT' : 'ARCHIVED'}`}>
                           {PURCHASE_STATUS[p.status]}</span></td>
-                        <td>{p.status === 'PENDING' && <button className="btn" onClick={() => retryPending(p)}>Vérifier / payer</button>}</td>
+                        <td className="cell-actions">{p.status === 'PENDING' && <button className="btn" onClick={() => retryPending(p)}>Vérifier / payer</button>}</td>
                       </tr>
                     ))}
                   </tbody>

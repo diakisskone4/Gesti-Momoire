@@ -83,7 +83,7 @@ export default function SupervisionPage({ scope }: { scope: 'supervised' | 'jury
   };
 
   return (
-    <Layout>
+    <Layout onRefresh={load}>
       <div className="scope-ws">
         <div className="ws">
           <div className="ws-head">
@@ -94,7 +94,7 @@ export default function SupervisionPage({ scope }: { scope: 'supervised' | 'jury
                 ? 'Consultez les mémoires dont vous êtes membre du jury et validez-les pour la soutenance.'
                 : 'Les étudiants vous rattachent à leur mémoire lors de sa création. Relisez, commentez et validez.'}</p>
             </div>
-            <button className="btn" onClick={load}>↻ Actualiser</button>
+            <button className="btn hide-mobile" onClick={load}>↻ Actualiser</button>
           </div>
 
           <div className="stats">
