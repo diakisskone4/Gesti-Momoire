@@ -87,6 +87,6 @@ class TemplatePurchase(models.Model):
     @classmethod
     def valid(cls):
         """Achats payés qui donnent droit au modèle. Les paiements simulés (bac à sable) ne comptent
-        que tant que l'application utilise elle-même les clés de test."""
+        qu'en développement, avec les clés de test ; jamais en production."""
         purchases = cls.objects.filter(status=cls.PAID)
-        return purchases if jemeni.is_sandbox() else purchases.exclude(provider=jemeni.PROVIDER_TEST)
+        return purchases if jemeni.test_mode_allowed() else purchases.exclude(provider=jemeni.PROVIDER_TEST)

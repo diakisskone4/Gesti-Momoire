@@ -19,12 +19,14 @@ ABANDONED_AFTER = timedelta(hours=2)
 
 
 def is_payable(purchase):
-    return (purchase.status == TemplatePurchase.PENDING and bool(purchase.checkout_url)
+    return (jemeni.is_enabled() and purchase.status == TemplatePurchase.PENDING and bool(purchase.checkout_url)
             and purchase.provider == jemeni.provider()
             and purchase.created_at >= timezone.now() - CHECKOUT_LIFETIME)
 
 
 def reusable_pending_purchase(user, template):
+    if not jemeni.is_enabled():
+        return None
     return (TemplatePurchase.objects
             .filter(user=user, template=template, status=TemplatePurchase.PENDING, provider=jemeni.provider(),
                     created_at__gte=timezone.now() - REUSE_PENDING_FOR)
@@ -38,7 +40,7 @@ def refresh_purchase(purchase):
     Un achat annulé ou échoué reste vérifiable : un paiement confirmé tardivement est toujours enregistré."""
     if purchase.status == TemplatePurchase.PAID or not purchase.checkout_session_id:
         return purchase
-    if purchase.provider != jemeni.provider():
+    if not jemeni.is_enabled() or purchase.provider != jemeni.provider():
         return purchase  # ancien achat SasPay, ou fait avec l'autre jeu de clés (test / réel)
 
     payment = jemeni.get_payment(purchase.checkout_session_id)

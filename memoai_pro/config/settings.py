@@ -311,6 +311,8 @@ JEMENI_TOKEN = os.environ.get('JEMENI_TOKEN', '').strip()  # jeton utilisateur
 JEMENI_WEBHOOK_SECRET = os.environ.get('JEMENI_WEBHOOK_SECRET', '').strip()
 JEMENI_API_URL = os.environ.get('JEMENI_API_URL', 'https://jemeni.net/api')
 JEMENI_COUNTRY = os.environ.get('JEMENI_COUNTRY', 'ml')
+# Paiements simulés (clés de test) : jamais en production, sinon les modèles seraient gratuits pour tous.
+JEMENI_ALLOW_SANDBOX = env_bool('JEMENI_ALLOW_SANDBOX', not ON_VERCEL)
 MODELE_PRICE = os.environ.get('MODELE_PRICE', '5000')  # prix d'un modèle (XOF) à sa création
 
 # IA : fournisseur au choix — "openrouter" (API compatible OpenAI) ou "anthropic" (API Claude)

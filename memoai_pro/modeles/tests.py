@@ -126,6 +126,21 @@ class TemplatePurchaseTests(APITestCase):
         with override_settings(JEMENI_PUBLIC_KEY='pk_test_x'):
             self.assertTrue(self.template.is_owned_by(self.user))
 
+    @override_settings(JEMENI_PUBLIC_KEY='pk_test_x', JEMENI_ALLOW_SANDBOX=False)
+    def test_test_keys_are_refused_in_production(self):
+        """Production avec des clés de test : aucun paiement, aucun modèle débloqué par un paiement simulé."""
+        done = TemplatePurchase.objects.create(user=self.user, template=self.template, amount=5000, status='PAID',
+                                               provider='jemeni_test')
+        self.assertFalse(self.template.is_owned_by(self.user))
+        done.status, done.checkout_session_id, done.checkout_url = 'PENDING', TX, 'https://jemeni.net/sandbox/pay/x'
+        done.save()
+        with mock.patch('modeles.jemeni.requests.request') as req:
+            res = self.client.post(f'/modeles/{self.template.slug}/purchase/')
+            self.assertEqual(res.status_code, 503)
+            res = self.client.post(f'/modeles/achats/{done.id}/verify/')
+            self.assertEqual((res.data['status'], res.data['checkout_url']), ('PENDING', ''))
+        req.assert_not_called()
+
     def test_old_saspay_purchases(self):
         """Achats SasPay : les payés restent acquis, les liens en attente ne sont plus proposés ni interrogés."""
         old = TemplatePurchase.objects.create(user=self.user, template=self.template, amount=5000, provider='saspay',

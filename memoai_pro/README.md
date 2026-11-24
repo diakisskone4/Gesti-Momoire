@@ -51,6 +51,6 @@ modifiable ensuite dans l'admin Django).
   validé qu'après vérification côté serveur (état de la transaction et montant).
 - Webhook (recommandé en production) : enregistrez `https://<votre-domaine>/modeles/webhook/jemeni/` pour
   `payment.success` / `payment.failed` et copiez le secret (affiché une seule fois) dans `JEMENI_WEBHOOK_SECRET`.
-- Mode test : avec une clé `pk_test_…`, les paiements sont simulés (numéro 98745632). Les modèles obtenus ainsi
-  ne restent débloqués que tant que les clés de test sont utilisées. Argent réel : clés `pk_live_…`.
+- Production : clés `pk_live_…` uniquement. Les clés `pk_test_…` (paiements simulés, numéro 98745632) ne fonctionnent
+  qu'en développement (`JEMENI_ALLOW_SANDBOX`), et un achat simulé ne débloque jamais un modèle en production.
 - Le catalogue se met à jour depuis `modeles/catalog.py` : `python manage.py sync_modeles`.

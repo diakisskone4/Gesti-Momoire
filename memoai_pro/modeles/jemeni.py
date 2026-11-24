@@ -39,6 +39,15 @@ def is_sandbox():
     return not settings.JEMENI_PUBLIC_KEY.startswith('pk_live_')
 
 
+def test_mode_allowed():
+    """Vrai si les clés de test sont utilisées ET autorisées (développement). Jamais en production."""
+    return is_sandbox() and settings.JEMENI_ALLOW_SANDBOX
+
+
+def is_enabled():
+    return not is_sandbox() or settings.JEMENI_ALLOW_SANDBOX
+
+
 def provider():
     return PROVIDER_TEST if is_sandbox() else PROVIDER_LIVE
 
@@ -56,6 +65,9 @@ def sign(method, url, body, timestamp):
 def _call(method, path, payload=None):
     if not (settings.JEMENI_PUBLIC_KEY and settings.JEMENI_SECRET_KEY and settings.JEMENI_TOKEN):
         raise JemeniError("Le paiement n'est pas configuré (clés Jɛmɛnipay manquantes).", 503)
+    if not is_enabled():
+        logger.error('Jemeni : clés de test refusées en production (clés pk_live_… attendues).')
+        raise JemeniError("Le paiement n'est pas encore ouvert. Revenez très bientôt.", 503)
     sandbox = is_sandbox()
     url = base_url(sandbox) + path
     # La signature porte sur le corps exact : il est sérialisé une seule fois et envoyé tel quel.
