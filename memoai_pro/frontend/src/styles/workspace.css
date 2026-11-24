@@ -102,3 +102,22 @@
 .ai-text > :last-child{margin-bottom:0}
 .scope-ws .ai-disclaimer{display:flex;align-items:flex-start;gap:8px;margin:18px 0 0;padding:10px 12px;border-radius:10px;background:var(--bg-hover);color:var(--text-muted);font-size:12.5px;line-height:1.5}
 .scope-ws .ai-disclaimer svg{flex:none;margin-top:2px}
+
+/* Paiement mobile money */
+.mm-operators { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.mm-operator { padding: 14px 6px; border: 2px solid var(--border-color); border-radius: var(--radius); background: transparent; color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.mm-operator.orange { border-top-color: #ff7900; }
+.mm-operator.moov { border-top-color: #0066b3; }
+.mm-operator.wave { border-top-color: #1dc8ff; }
+.mm-operator.active { border-color: var(--primary, #0f766e); box-shadow: 0 0 0 2px rgba(15, 118, 110, .25); }
+.mm-steps { margin: 0 0 12px; padding-left: 20px; line-height: 1.6; font-size: 14px; color: var(--text-primary); }
+.mm-steps li { margin-bottom: 8px; }
+.mm-number { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0; padding: 10px 12px; border: 1px dashed var(--border-color); border-radius: var(--radius); }
+.mm-number strong { font-size: 20px; letter-spacing: .04em; white-space: nowrap; }
+.mm-recap { list-style: none; margin: 12px 0 0; padding: 0; }
+.mm-recap li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-color); font-size: 14px; }
+.mm-recap strong { text-align: right; overflow-wrap: anywhere; }
+.mm-message { flex-basis: 100%; max-width: 360px; text-align: left; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: var(--radius); background: transparent; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; overflow-wrap: anywhere; }
+.mm-message strong { display: block; margin-top: 4px; color: var(--text-primary); }
+.mm-device { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0 0 10px; }
+.mm-token { display: block; padding: 12px; margin-bottom: 10px; border: 1px dashed var(--border-color); border-radius: var(--radius); overflow-wrap: anywhere; user-select: all; }

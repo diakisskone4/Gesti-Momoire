@@ -53,11 +53,18 @@ class MemoirTemplate(models.Model):
         return self.is_free or TemplatePurchase.valid().filter(template=self, user=user).exists()
 
 
-class TemplatePurchase(models.Model):
-    """Achat d'un modèle via Jɛmɛnipay (page de paiement hébergée) ; « saspay » : anciens achats."""
+OPERATOR_CHOICES = [('orange', 'Orange Money'), ('moov', 'Moov Money'), ('wave', 'Wave')]
 
-    PENDING, PAID, FAILED, CANCELLED = 'PENDING', 'PAID', 'FAILED', 'CANCELLED'
-    STATUS_CHOICES = [(PENDING, 'En attente'), (PAID, 'Payé'), (FAILED, 'Échoué'), (CANCELLED, 'Annulé')]
+
+class TemplatePurchase(models.Model):
+    """Achat d'un modèle. Prestataire (`provider`) : « mobile_money » (API de paiement de MemoAI, voir
+    mobile_money.py), « jemeni » (page de paiement hébergée) ou « saspay » (anciens achats)."""
+
+    PROVIDER_MOBILE_MONEY = 'mobile_money'
+
+    PENDING, SUBMITTED, PAID, FAILED, CANCELLED = 'PENDING', 'SUBMITTED', 'PAID', 'FAILED', 'CANCELLED'
+    STATUS_CHOICES = [(PENDING, 'En attente'), (SUBMITTED, 'En vérification'), (PAID, 'Payé'),
+                      (FAILED, 'Échoué'), (CANCELLED, 'Annulé')]
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='template_purchases')
     template = models.ForeignKey(MemoirTemplate, on_delete=models.PROTECT, related_name='purchases')
@@ -73,6 +80,13 @@ class TemplatePurchase(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+    # Paiement mobile money : opérateur et numéro déclarés par le client, décision de l'administrateur.
+    operator = models.CharField(max_length=10, blank=True, choices=OPERATOR_CHOICES)
+    payer_phone = models.CharField(max_length=20, blank=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name='reviewed_purchases')
+    review_note = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -80,6 +94,10 @@ class TemplatePurchase(models.Model):
         verbose_name_plural = 'achats de modèles'
         # Pas de contrainte d'unicité sur les achats payés : un paiement réellement encaissé
         # doit toujours être enregistré. Les doublons sont évités en amont (session réutilisée).
+        # En mobile money, une même transaction ne peut toutefois payer qu'un seul achat.
+        constraints = [models.UniqueConstraint(
+            fields=['operator', 'transaction_reference'], name='mobile_money_reference_unique',
+            condition=models.Q(provider='mobile_money', status='PAID'))]
 
     def __str__(self):
         return f'{self.user} — {self.template} ({self.status})'
@@ -90,3 +108,41 @@ class TemplatePurchase(models.Model):
         qu'en développement, avec les clés de test ; jamais en production."""
         purchases = cls.objects.filter(status=cls.PAID)
         return purchases if jemeni.test_mode_allowed() else purchases.exclude(provider=jemeni.PROVIDER_TEST)
+
+
+class PaymentDevice(models.Model):
+    """Téléphone d'encaissement (application « MemoAI Encaissement ») autorisé à transmettre les messages."""
+    name = models.CharField(max_length=80)
+    token_hash = models.CharField(max_length=64, unique=True)  # empreinte SHA-256 : le jeton n'est jamais stocké
+    is_active = models.BooleanField(default=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = "téléphone d'encaissement"
+        verbose_name_plural = "téléphones d'encaissement"
+
+    def __str__(self):
+        return self.name
+
+
+class PaymentMessage(models.Model):
+    """Message « argent reçu » d'un opérateur, transmis par le téléphone d'encaissement."""
+    device = models.ForeignKey(PaymentDevice, null=True, on_delete=models.SET_NULL, related_name='messages')
+    operator = models.CharField(max_length=10, choices=OPERATOR_CHOICES)
+    text = models.TextField()
+    amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    received_at = models.DateTimeField(db_index=True)
+    fingerprint = models.CharField(max_length=64, unique=True)  # un même message n'est enregistré qu'une fois
+    purchase = models.OneToOneField(TemplatePurchase, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name='payment_message')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-received_at']
+        verbose_name = 'message de paiement'
+        verbose_name_plural = 'messages de paiement'
+
+    def __str__(self):
+        return f'{self.get_operator_display()} {self.amount or "?"} ({self.received_at:%d/%m/%Y %H:%M})'

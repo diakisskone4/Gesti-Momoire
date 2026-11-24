@@ -40,14 +40,23 @@ L'URL du backend se règle avec `VITE_API_URL` (voir `.env.example`, défaut `ht
 | Jury | `/pro/login/jury` | `/jury` |
 | Administrateur | `/pro/login/admin` (inscription avec `ADMIN_REGISTRATION_CODE`) | `/admin` |
 
-## Modèles de mémoire payants (Jɛmɛnipay)
+## Modèles de mémoire payants
 
 Six modèles (Licence, Master sciences & techniques, gestion, sciences sociales, droit, thèse de doctorat),
 chacun avec sa page de garde (6 styles) et un plan commenté. Prix : 5 000 FCFA par modèle (`MODELE_PRICE`,
 modifiable ensuite dans l'admin Django).
 
 - Catalogue : `/modeles` (frontend) — API `/modeles/`.
-- Paiement : page hébergée Jɛmɛnipay (`JEMENI_PUBLIC_KEY`, `JEMENI_SECRET_KEY`, `JEMENI_TOKEN`). Le paiement n'est
+- **Paiement par l'API de MemoAI** (`modeles/mobile_money.py`), active dès que `PAYMENT_NUMBER` est défini :
+  le client envoie l'argent à ce numéro (Orange Money, Moov Money ou Wave), puis déclare son numéro et la référence.
+  Numéro différent pour un opérateur : `PAYMENT_NUMBER_ORANGE`, `PAYMENT_NUMBER_MOOV`, `PAYMENT_NUMBER_WAVE`.
+  `PAYMENT_HOLDER` (facultatif) : nom du bénéficiaire affiché au client. `PAYMENT_NOTIFY_EMAILS` (facultatif) :
+  destinataires des alertes (par défaut, tous les administrateurs).
+  - Confirmation automatique : application Android `android-encaissement/` sur le téléphone qui reçoit l'argent
+    (`bash android-app/build.sh ../android-encaissement Encaissement`), associée depuis `/admin`. Opérateur, montant,
+    référence, date et numéro doivent concorder ; une transaction ne paie qu'un seul achat.
+  - Sinon, confirmation manuelle par un administrateur dans `/admin`.
+- Sans `PAYMENT_NUMBER`, paiement par page hébergée Jɛmɛnipay (`JEMENI_PUBLIC_KEY`, `JEMENI_SECRET_KEY`, `JEMENI_TOKEN`). Le paiement n'est
   validé qu'après vérification côté serveur (état de la transaction et montant).
 - Webhook (recommandé en production) : enregistrez `https://<votre-domaine>/modeles/webhook/jemeni/` pour
   `payment.success` / `payment.failed` et copiez le secret (affiché une seule fois) dans `JEMENI_WEBHOOK_SECRET`.

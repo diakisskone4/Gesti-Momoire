@@ -81,13 +81,16 @@ def mark_paid(purchase, transaction_id, reference, charged=None):
         locked.paid_at = timezone.now()
         locked.save()
     purchase.refresh_from_db()
+    notify_buyer(purchase, f'Achat confirmé : modèle « {purchase.template.name} »',
+                 'Vous pouvez maintenant l\'appliquer à vos mémoires.')
+
+
+def notify_buyer(purchase, verb, description):
     try:
         from notifications.models import Notification
-        Notification.objects.create(
-            recipient=purchase.user, verb=f'Achat confirmé : modèle « {purchase.template.name} »',
-            target_type='template', target_id=purchase.template_id,
-            description='Vous pouvez maintenant l\'appliquer à vos mémoires.',
-        )
+        with transaction.atomic():
+            Notification.objects.create(recipient=purchase.user, verb=verb[:100], target_type='template',
+                                        target_id=purchase.template_id, description=description)
     except Exception:  # la notification ne doit jamais bloquer la confirmation du paiement
         logger.warning('Notification d\'achat non créée', exc_info=True)
 

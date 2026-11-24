@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { formatDate, formatNumber } from '../../lib/format';
 import type { AdminStats, AdminUser } from '../../lib/models';
 import { LEVEL_LABELS, PROJECT_STATUS_LABELS, ROLES, type RoleCode } from '../../lib/roles';
+import AdminPayments from './AdminPayments';
 import '../../styles/workspace.css';
 
 const STATUS_KEYS = ['DRAFT', 'IN_PROGRESS', 'REVIEW', 'VALIDATED', 'ARCHIVED'];
@@ -133,6 +134,8 @@ export default function AdminPage() {
               </div>
             </>
           )}
+
+          <AdminPayments onChanged={loadStats} />
 
           <div className="ws-head"><div><h2 style={{ fontSize: 20 }}>Gestion des utilisateurs</h2></div></div>
 

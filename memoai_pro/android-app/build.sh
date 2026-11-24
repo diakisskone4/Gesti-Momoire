@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Construit l'APK signé de MemoAI sans Gradle, avec les outils du SDK Android déjà installés.
+# Construit un APK signé sans Gradle, avec les outils du SDK Android déjà installés.
 #
-#   bash build.sh            → build/MemoAI.apk
+#   bash build.sh                                     → build/MemoAI.apk
+#   bash build.sh ../android-encaissement Encaissement → build/Encaissement.apk (application du gérant)
 #
 # Prérequis : JDK 17+ (javac, keytool) et SDK Android (build-tools + une plateforme).
 # La clé de signature est créée au premier lancement dans $KEYSTORE_DIR (hors du dépôt Git) :
 # GARDEZ-LA PRÉCIEUSEMENT, elle est indispensable pour publier les mises à jour de l'application.
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/${1:-.}"
+APK="build/${2:-MemoAI}.apk"
 
 VERSION_CODE=$(sed -n 's/^code=//p' version.properties)
 VERSION_NAME=$(sed -n 's/^name=//p' version.properties)
@@ -21,11 +23,13 @@ PASSFILE="$KEYSTORE_DIR/mot-de-passe.txt"
 PYTHON="${PYTHON:-../venv/Scripts/python.exe}"
 
 echo "SDK : $BT | $PLATFORM"
+# L'éditeur (VS Code) lit le SDK Android dans libs/ (voir .classpath) ; le fichier n'est pas versionné.
+mkdir -p libs && cmp -s "$JAR" libs/android.jar || cp "$JAR" libs/android.jar
 rm -rf build && mkdir -p build/compiled build/gen build/classes build/dex
 
 # 1. Ressources (icônes, thème, textes) + manifeste
 "$BT/aapt2.exe" compile --dir res -o build/compiled/res.zip
-"$BT/aapt2.exe" link -I "$JAR" --manifest AndroidManifest.xml -A assets --java build/gen \
+"$BT/aapt2.exe" link -I "$JAR" --manifest AndroidManifest.xml $([ -d assets ] && echo "-A assets") --java build/gen \
   --min-sdk-version 24 --target-sdk-version 36 \
   --version-code "$VERSION_CODE" --version-name "$VERSION_NAME" \
   -o build/base.apk build/compiled/res.zip
@@ -48,6 +52,6 @@ fi
 win() { cygpath -w "$1" 2>/dev/null || echo "$1"; }
 "$BT/zipalign.exe" -p -f 4 build/base.apk build/aligned.apk
 "$BT/apksigner.bat" sign --ks "$(win "$KEYSTORE")" --ks-key-alias memoai --ks-pass "file:$(win "$PASSFILE")" \
-  --out build/MemoAI.apk build/aligned.apk
-"$BT/apksigner.bat" verify --print-certs build/MemoAI.apk | head -3
-echo "APK prêt : $(pwd)/build/MemoAI.apk (version $VERSION_NAME, code $VERSION_CODE)"
+  --out "$APK" build/aligned.apk
+"$BT/apksigner.bat" verify --print-certs "$APK" | head -3
+echo "APK prêt : $(pwd)/$APK (version $VERSION_NAME, code $VERSION_CODE)"

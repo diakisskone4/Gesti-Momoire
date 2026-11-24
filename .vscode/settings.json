@@ -1,0 +1,3 @@
+{
+    "java.project.referencedLibraries": ["lib/**/*.jar", "memoai_pro/android-encaissement/libs/android.jar"]
+}

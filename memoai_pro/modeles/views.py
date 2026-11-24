@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from projects.access import get_owned_project, get_readable_project
-from . import jemeni, services
+from . import jemeni, mobile_money, services
 from .covers import cover_data, render_cover_html
 from .models import MemoirTemplate, TemplatePurchase
 from .serializers import MemoirTemplateSerializer, TemplatePurchaseSerializer
@@ -38,7 +38,7 @@ class MemoirTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     GET  /modeles/                      catalogue (+ owned, aperçu du plan)
     GET  /modeles/<slug>/               détail (plan complet si acheté)
     GET  /modeles/<slug>/cover/         page de garde d'exemple (HTML, filigrane si non acheté)
-    POST /modeles/<slug>/purchase/      crée la page de paiement Jɛmɛnipay → {checkout_url}
+    POST /modeles/<slug>/purchase/      ouvre l'achat (mobile money ; sinon page Jɛmɛnipay → {checkout_url})
     POST /modeles/<slug>/apply/         applique le modèle acheté à un mémoire {project_id}
     """
     serializer_class = MemoirTemplateSerializer
@@ -68,6 +68,11 @@ class MemoirTemplateViewSet(viewsets.ReadOnlyModelViewSet):
             raise ValidationError({"error": "Ce modèle est gratuit : vous pouvez l'utiliser directement."})
         if template.is_owned_by(user):
             raise ValidationError({'error': 'Vous possédez déjà ce modèle.'})
+
+        if mobile_money.is_enabled():
+            purchase, created = mobile_money.open_purchase(user, template)
+            return Response(TemplatePurchaseSerializer(purchase).data,
+                            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
         pending = services.reusable_pending_purchase(user, template)
         if pending:
@@ -110,18 +115,36 @@ class MemoirTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class TemplatePurchaseViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
-    """Achats de l'utilisateur. POST /modeles/achats/<id>/verify/ confirme le paiement auprès de Jɛmɛnipay."""
+    """Achats de l'utilisateur.
+
+    POST /modeles/achats/<id>/declare/  annonce un paiement mobile money {operator, phone, reference}
+    POST /modeles/achats/<id>/verify/   vérifie le paiement (message de l'opérateur, ou Jɛmɛnipay)
+    """
     serializer_class = TemplatePurchaseSerializer
     permission_classes = [IsAuthenticated]
+    throttle_scope = None
 
     def get_queryset(self):
         if getattr(self, 'swagger_fake_view', False):
             return TemplatePurchase.objects.none()
         return TemplatePurchase.objects.filter(user=self.request.user).select_related('template')
 
+    @action(detail=True, methods=['post'], throttle_scope='payment_declare')
+    def declare(self, request, pk=None):
+        purchase = self.get_object()
+        try:
+            mobile_money.declare(purchase, request.data.get('operator'), request.data.get('phone'),
+                                 request.data.get('reference'))
+        except mobile_money.PaymentError as e:
+            raise ValidationError({'error': str(e)})
+        return Response(self.get_serializer(purchase).data)
+
     @action(detail=True, methods=['post'])
     def verify(self, request, pk=None):
         purchase = self.get_object()
+        if purchase.provider == mobile_money.PROVIDER:
+            mobile_money.match_purchase(purchase)
+            return Response(self.get_serializer(purchase).data)
         try:
             services.refresh_purchase(purchase)
         except jemeni.JemeniError as e:

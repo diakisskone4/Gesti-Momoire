@@ -8,7 +8,8 @@ import Layout from '../../components/Layout';
 import Modal from '../../components/Modal';
 import { useToast } from '../../context/ToastContext';
 import { formatDate, formatPrice } from '../../lib/format';
-import type { MemoirTemplate, Project, TemplatePurchase } from '../../lib/models';
+import type { MemoirTemplate, PaymentOptions, Project, TemplatePurchase } from '../../lib/models';
+import MobileMoneyModal from './MobileMoneyModal';
 import '../../styles/workspace.css';
 
 type LevelFilter = 'ALL' | 'LICENCE' | 'MASTER' | 'DOCTORAT' | 'OWNED';
@@ -22,10 +23,10 @@ const FILTERS: { key: LevelFilter; label: string }[] = [
 ];
 
 const PURCHASE_STATUS: Record<string, string> = {
-  PENDING: 'En attente de paiement', PAID: 'Payé', FAILED: 'Échoué', CANCELLED: 'Annulé / expiré',
+  PENDING: 'En attente de paiement', SUBMITTED: 'En vérification', PAID: 'Payé', FAILED: 'Échoué', CANCELLED: 'Annulé / expiré',
 };
 
-/** Catalogue des modèles de mémoire payants (5 000 FCFA, paiement Jɛmɛnipay). */
+/** Catalogue des modèles de mémoire payants (mobile money direct, ou page Jɛmɛnipay selon le serveur). */
 export default function TemplatesPage() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -39,6 +40,8 @@ export default function TemplatesPage() {
   const [detail, setDetail] = useState<MemoirTemplate | null>(null);
   const [applyTo, setApplyTo] = useState<MemoirTemplate | null>(null);
   const [returnState, setReturnState] = useState<{ status: 'checking' | 'paid' | 'pending' | 'failed'; name?: string } | null>(null);
+  const [options, setOptions] = useState<PaymentOptions | null>(null);
+  const [paying, setPaying] = useState<TemplatePurchase | null>(null);
   const pollTimer = useRef<number>();
 
   const load = useCallback(async () => {
@@ -56,6 +59,27 @@ export default function TemplatesPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { modelesApi.paymentOptions().then(setOptions).catch(() => undefined); }, []);
+
+  /** Ouvre le paiement d'un achat : fenêtre mobile money ou page Jɛmɛnipay. */
+  const openPayment = async (purchase: TemplatePurchase) => {
+    if (purchase.provider !== 'mobile_money') {
+      window.location.assign(purchase.checkout_url);
+      return;
+    }
+    const current = options?.mode === 'mobile_money' ? options : await modelesApi.paymentOptions();
+    if (current.mode !== 'mobile_money') throw new Error("Ce mode de paiement n'est plus proposé. Relancez l'achat.");
+    setOptions(current);
+    setDetail(null);
+    setBuying(null);
+    setPaying(purchase);
+  };
+
+  const paymentUpdated = (purchase: TemplatePurchase) => {
+    setPaying(purchase);
+    if (purchase.status === 'PAID') toast.success('Paiement confirmé', `Le modèle « ${purchase.template_name} » est débloqué.`);
+    if (purchase.status !== paying?.status) load();
+  };
 
   // Retour de la page de paiement Jɛmɛnipay : /modeles?achat=<id>&transaction_id=…
   useEffect(() => {
@@ -97,8 +121,7 @@ export default function TemplatesPage() {
   const buy = async (t: MemoirTemplate) => {
     setBuying(t.slug);
     try {
-      const purchase = await modelesApi.purchase(t.slug);
-      window.location.assign(purchase.checkout_url);
+      await openPayment(await modelesApi.purchase(t.slug));
     } catch (err) {
       setBuying(null);
       toast.error('Paiement indisponible', describeError(err));
@@ -110,7 +133,7 @@ export default function TemplatesPage() {
       const updated = await modelesApi.verify(p.id);
       setPurchases(list => list.map(x => (x.id === updated.id ? updated : x)));
       if (updated.status === 'PAID') { toast.success('Paiement confirmé'); load(); }
-      else if (updated.status === 'PENDING' && updated.checkout_url) window.location.assign(updated.checkout_url);
+      else if (updated.status === 'SUBMITTED' || (updated.status === 'PENDING' && (updated.checkout_url || updated.provider === 'mobile_money'))) await openPayment(updated);
       else toast.warning('Session expirée', 'Relancez un achat depuis le catalogue.');
     } catch (err) {
       toast.error('Vérification impossible', describeError(err));
@@ -194,8 +217,9 @@ export default function TemplatesPage() {
           </div>
 
           <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
-            🔒 Paiement sécurisé par Jɛmɛnipay : saisissez votre numéro Jɛmɛnipay, puis validez la demande dans
-            l'application Jɛmɛnipay de votre téléphone. Le modèle est débloqué dès la confirmation du paiement.
+            {options?.mode === 'mobile_money'
+              ? '🔒 Paiement par Orange Money, Moov Money ou Wave. Le modèle est débloqué dès que nous avons confirmé la réception de votre paiement.'
+              : options?.mode === 'jemeni' && "🔒 Paiement sécurisé par Jɛmɛnipay : saisissez votre numéro Jɛmɛnipay, puis validez la demande dans l'application Jɛmɛnipay de votre téléphone. Le modèle est débloqué dès la confirmation du paiement."}
           </p>
 
           {purchases.length > 0 && (
@@ -210,9 +234,9 @@ export default function TemplatesPage() {
                         <td className="cell-title" data-label="Modèle">{p.template_name}</td>
                         <td data-label="Date">{formatDate(p.paid_at ?? p.created_at)}</td>
                         <td className="num" data-label="Montant">{formatPrice(p.amount_charged ?? p.amount, p.currency)}</td>
-                        <td data-label="Statut"><span className={`badge ${p.status === 'PAID' ? 'VALIDATED' : p.status === 'PENDING' ? 'DRAFT' : 'ARCHIVED'}`}>
-                          {PURCHASE_STATUS[p.status]}</span></td>
-                        <td className="cell-actions">{p.status === 'PENDING' && <button className="btn" onClick={() => retryPending(p)}>Vérifier / payer</button>}</td>
+                        <td data-label="Statut"><span className={`badge ${p.status === 'PAID' ? 'VALIDATED' : p.status === 'PENDING' || p.status === 'SUBMITTED' ? 'DRAFT' : 'ARCHIVED'}`}>
+                          {PURCHASE_STATUS[p.status]}</span>{p.status === 'FAILED' && p.review_note && <><br /><span className="muted">{p.review_note}</span></>}</td>
+                        <td className="cell-actions">{(p.status === 'PENDING' || p.status === 'SUBMITTED') && <button className="btn" onClick={() => retryPending(p)}>{p.status === 'SUBMITTED' ? 'Suivre' : 'Vérifier / payer'}</button>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -227,6 +251,10 @@ export default function TemplatesPage() {
         <TemplateDetailModal template={detail} cover={covers[detail.slug] ?? null} onClose={() => setDetail(null)}
                              buying={buying !== null}
                              onBuy={() => buy(detail)} onUse={() => { setApplyTo(detail); setDetail(null); }} />
+      )}
+      {paying && options && (
+        <MobileMoneyModal key={paying.id} purchase={paying} options={options} onClose={() => { setPaying(null); load(); }}
+                          onUpdate={paymentUpdated} />
       )}
       {applyTo && (
         <ApplyModal template={applyTo} onClose={() => setApplyTo(null)}

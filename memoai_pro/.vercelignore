@@ -11,3 +11,5 @@ find
 python
 .env.local
 .vercel/
+android-app/
+android-encaissement/

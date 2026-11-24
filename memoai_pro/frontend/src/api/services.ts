@@ -1,7 +1,7 @@
 import { request } from './client';
 import type {
   AdminStats, AdminUser, AiTask, AppNotification, AuthResponse, Chapter, Collaborator, Comment, MemoirTemplate, Project,
-  ProjectInput, Reference, RegisterPayload, ShareLink, TemplatePurchase, User,
+  ProjectInput, Reference, RegisterPayload, ShareLink, TemplatePurchase, User, AdminPayment, OperatorCode, PaymentDevice, PaymentOptions
 } from '../lib/models';
 import type { RoleCode } from '../lib/roles';
 
@@ -148,6 +148,17 @@ export const adminApi = {
   deleteUser: (id: number) => request(`/users/admin/users/${id}/`, { method: 'DELETE' }),
 };
 
+export const adminPaymentsApi = {
+  list: (all: boolean) => request<AdminPayment[]>('/modeles/admin/paiements/', { params: { etat: all ? 'tous' : undefined } }),
+  approve: (id: number, messageId?: number) =>
+    request<AdminPayment>(`/modeles/admin/paiements/${id}/approve/`, { method: 'POST', body: messageId ? { message_id: messageId } : {} }),
+  reject: (id: number, reason: string) =>
+    request<AdminPayment>(`/modeles/admin/paiements/${id}/reject/`, { method: 'POST', body: { reason } }),
+  devices: () => request<PaymentDevice[]>('/modeles/admin/telephones/'),
+  pair: (name: string) => request<PaymentDevice & { token: string }>('/modeles/admin/telephones/', { method: 'POST', body: { name } }),
+  revoke: (id: number) => request(`/modeles/admin/telephones/${id}/`, { method: 'DELETE' }),
+};
+
 export const modelesApi = {
   list: () => request<MemoirTemplate[]>('/modeles/'),
   get: (slug: string) => request<MemoirTemplate>(`/modeles/${slug}/`),
@@ -156,6 +167,9 @@ export const modelesApi = {
   apply: (slug: string, projectId: number) =>
     request<{ project_id: number; chapters_created: number }>(`/modeles/${slug}/apply/`, { method: 'POST', body: { project_id: projectId } }),
   purchases: () => request<TemplatePurchase[]>('/modeles/achats/'),
+  paymentOptions: () => request<PaymentOptions>('/modeles/paiement/'),
+  declare: (purchaseId: number, data: { operator: OperatorCode; phone: string; reference: string }) =>
+    request<TemplatePurchase>(`/modeles/achats/${purchaseId}/declare/`, { method: 'POST', body: data }),
   verify: (purchaseId: number) => request<TemplatePurchase>(`/modeles/achats/${purchaseId}/verify/`, { method: 'POST', body: {} }),
   projectCover: (projectId: number) => request<{ html: string }>(`/modeles/projects/${projectId}/cover/`),
 };

@@ -223,11 +223,18 @@ export interface MemoirTemplate {
   structure: TemplateStructureItem[] | null;
 }
 
+export type OperatorCode = 'orange' | 'moov' | 'wave';
+
 export interface TemplatePurchase {
   id: number;
   template_slug: string;
   template_name: string;
-  status: 'PENDING' | 'PAID' | 'FAILED' | 'CANCELLED';
+  status: 'PENDING' | 'SUBMITTED' | 'PAID' | 'FAILED' | 'CANCELLED';
+  provider: 'mobile_money' | 'jemeni' | 'jemeni_test' | 'saspay';
+  operator: OperatorCode | '';
+  payer_phone: string;
+  submitted_at: string | null;
+  review_note: string;
   amount: string;
   currency: string;
   amount_charged: string | null;
@@ -235,4 +242,35 @@ export interface TemplatePurchase {
   transaction_reference: string;
   created_at: string;
   paid_at: string | null;
+}
+
+/** Moyens de paiement : mobile money direct (numéro d'encaissement) ou page Jɛmɛnipay. */
+export interface PaymentOptions {
+  mode: 'mobile_money' | 'jemeni';
+  holder?: string;
+  operators?: { code: OperatorCode; label: string; ussd: string; steps: string; number: string; number_display: string }[];
+}
+
+export interface PaymentMessage {
+  id: number;
+  operator: OperatorCode;
+  text: string;
+  amount: string | null;
+  received_at: string;
+  purchase: number | null;
+}
+
+export interface AdminPayment extends TemplatePurchase {
+  buyer_name: string;
+  buyer_email: string;
+  suggestions: PaymentMessage[];
+  automatic: boolean;
+}
+
+export interface PaymentDevice {
+  id: number;
+  name: string;
+  is_active: boolean;
+  last_seen_at: string | null;
+  created_at: string;
 }

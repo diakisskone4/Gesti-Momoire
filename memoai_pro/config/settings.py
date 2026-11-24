@@ -169,6 +169,7 @@ REST_FRAMEWORK = {
         'shared': '30/min',
         'ai': os.environ.get('THROTTLE_AI', '150/hour'),  # « Rédiger le mémoire » : un appel par chapitre
         'upload': '60/hour',
+        'payment_declare': '15/hour',        # déclarations de paiement par client
     },
     # Vercel : l'adresse réelle du visiteur est la première de X-Forwarded-For.
     'NUM_PROXIES': 1 if ON_VERCEL else None,
@@ -302,6 +303,15 @@ else:
 # Stripe
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
+
+# API de paiement de MemoAI (modeles/mobile_money.py) : les clients paient directement sur ce numéro
+# par Orange Money, Moov Money ou Wave. Vide : le paiement passe par Jɛmɛnipay.
+PAYMENT_NUMBER = '' if TESTING else os.environ.get('PAYMENT_NUMBER', '').strip()
+# Numéro propre à un opérateur, s'il diffère : PAYMENT_NUMBER_ORANGE, PAYMENT_NUMBER_MOOV, PAYMENT_NUMBER_WAVE.
+PAYMENT_NUMBERS = {} if TESTING else {
+    operator: os.environ.get(f'PAYMENT_NUMBER_{operator.upper()}', '').strip() for operator in ('orange', 'moov', 'wave')}
+PAYMENT_HOLDER = os.environ.get('PAYMENT_HOLDER', '').strip()  # nom du bénéficiaire, affiché au client
+PAYMENT_NOTIFY_EMAILS = env_list('PAYMENT_NOTIFY_EMAILS')  # vide : tous les administrateurs
 
 # Jɛmɛnipay : paiement des modèles de mémoire (page de paiement hébergée).
 # Le mode découle de la clé publique : pk_live_… = argent réel, pk_test_… = bac à sable (paiements simulés).
