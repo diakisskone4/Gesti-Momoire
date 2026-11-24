@@ -3,6 +3,8 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import models
 
+from . import jemeni
+
 
 class MemoirTemplate(models.Model):
     """Modèle de mémoire vendu sur la plateforme : page de garde + plan type commenté."""
@@ -48,11 +50,11 @@ class MemoirTemplate(models.Model):
         return self.price <= 0
 
     def is_owned_by(self, user):
-        return self.is_free or self.purchases.filter(user=user, status=TemplatePurchase.PAID).exists()
+        return self.is_free or TemplatePurchase.valid().filter(template=self, user=user).exists()
 
 
 class TemplatePurchase(models.Model):
-    """Achat d'un modèle via SasPay (checkout hébergé)."""
+    """Achat d'un modèle via Jɛmɛnipay (page de paiement hébergée) ; « saspay » : anciens achats."""
 
     PENDING, PAID, FAILED, CANCELLED = 'PENDING', 'PAID', 'FAILED', 'CANCELLED'
     STATUS_CHOICES = [(PENDING, 'En attente'), (PAID, 'Payé'), (FAILED, 'Échoué'), (CANCELLED, 'Annulé')]
@@ -62,7 +64,7 @@ class TemplatePurchase(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=3, default='XOF')
-    provider = models.CharField(max_length=20, default='saspay')
+    provider = models.CharField(max_length=20, default='jemeni')
     checkout_session_id = models.CharField(max_length=64, blank=True, db_index=True)
     checkout_url = models.URLField(max_length=500, blank=True)
     transaction_id = models.CharField(max_length=64, blank=True, db_index=True)
@@ -81,3 +83,10 @@ class TemplatePurchase(models.Model):
 
     def __str__(self):
         return f'{self.user} — {self.template} ({self.status})'
+
+    @classmethod
+    def valid(cls):
+        """Achats payés qui donnent droit au modèle. Les paiements simulés (bac à sable) ne comptent
+        que tant que l'application utilise elle-même les clés de test."""
+        purchases = cls.objects.filter(status=cls.PAID)
+        return purchases if jemeni.is_sandbox() else purchases.exclude(provider=jemeni.PROVIDER_TEST)

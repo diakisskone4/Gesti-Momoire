@@ -1,11 +1,8 @@
 import json
 import logging
-from datetime import timedelta
 
 from django.conf import settings
-from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
-from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from rest_framework import mixins, status, viewsets
@@ -16,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from projects.access import get_owned_project, get_readable_project
-from . import saspay, services
+from . import jemeni, services
 from .covers import cover_data, render_cover_html
 from .models import MemoirTemplate, TemplatePurchase
 from .serializers import MemoirTemplateSerializer, TemplatePurchaseSerializer
@@ -26,12 +23,12 @@ logger = logging.getLogger(__name__)
 
 def owned_template_ids(user):
     """Modèles achetés par l'utilisateur + modèles gratuits (disponibles pour tous)."""
-    paid = TemplatePurchase.objects.filter(user=user, status=TemplatePurchase.PAID).values_list('template_id', flat=True)
+    paid = TemplatePurchase.valid().filter(user=user).values_list('template_id', flat=True)
     free = MemoirTemplate.objects.filter(price__lte=0).values_list('id', flat=True)
     return set(paid) | set(free)
 
 
-def saspay_error(e):
+def payment_error(e):
     return Response({'error': str(e)}, status=e.status)
 
 
@@ -41,7 +38,7 @@ class MemoirTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     GET  /modeles/                      catalogue (+ owned, aperçu du plan)
     GET  /modeles/<slug>/               détail (plan complet si acheté)
     GET  /modeles/<slug>/cover/         page de garde d'exemple (HTML, filigrane si non acheté)
-    POST /modeles/<slug>/purchase/      crée la session de paiement SasPay → {checkout_url}
+    POST /modeles/<slug>/purchase/      crée la page de paiement Jɛmɛnipay → {checkout_url}
     POST /modeles/<slug>/apply/         applique le modèle acheté à un mémoire {project_id}
     """
     serializer_class = MemoirTemplateSerializer
@@ -78,27 +75,26 @@ class MemoirTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 
         purchase = TemplatePurchase.objects.create(
             user=user, template=template, amount=template.price, currency=template.currency,
+            provider=jemeni.provider(),
         )
         try:
-            session = saspay.create_checkout_session(
+            session = jemeni.create_checkout(
                 amount=template.price,
                 currency=template.currency,
-                customer_email=user.email,
-                customer_name=user.full_name,
-                customer_phone=user.phone,
-                description=f'MemoAI Pro — Modèle « {template.name} »',
+                description=f'Modèle « {template.name} »',
+                reference=f'MEMOAI-{purchase.id}',
                 return_url=f'{settings.FRONTEND_URL}/modeles?achat={purchase.id}',
-                metadata={'purchase_id': purchase.id, 'user_id': user.id, 'template': template.slug},
-                country=settings.SASPAY_DEFAULT_COUNTRY or None,
+                metadata={'purchase_id': purchase.id, 'template': template.slug},
             )
-        except saspay.SasPayError as e:
+        except jemeni.JemeniError as e:
             purchase.status = TemplatePurchase.FAILED
             purchase.save(update_fields=['status', 'updated_at'])
-            return saspay_error(e)
+            return payment_error(e)
 
         purchase.checkout_session_id = session['id']
         purchase.checkout_url = session['checkout_url']
-        purchase.save(update_fields=['checkout_session_id', 'checkout_url', 'updated_at'])
+        purchase.transaction_reference = session['reference']
+        purchase.save(update_fields=['checkout_session_id', 'checkout_url', 'transaction_reference', 'updated_at'])
         return Response(TemplatePurchaseSerializer(purchase).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
@@ -114,7 +110,7 @@ class MemoirTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class TemplatePurchaseViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
-    """Achats de l'utilisateur. POST /modeles/achats/<id>/verify/ confirme le paiement auprès de SasPay."""
+    """Achats de l'utilisateur. POST /modeles/achats/<id>/verify/ confirme le paiement auprès de Jɛmɛnipay."""
     serializer_class = TemplatePurchaseSerializer
     permission_classes = [IsAuthenticated]
 
@@ -128,8 +124,8 @@ class TemplatePurchaseViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, 
         purchase = self.get_object()
         try:
             services.refresh_purchase(purchase)
-        except saspay.SasPayError as e:
-            return saspay_error(e)
+        except jemeni.JemeniError as e:
+            return payment_error(e)
         return Response(self.get_serializer(purchase).data)
 
 
@@ -151,36 +147,26 @@ class ProjectCoverView(APIView):
 
 @csrf_exempt
 @require_POST
-def saspay_webhook(request):
-    """Webhook SasPay (événements transaction.*), signé en HMAC-SHA256.
-    Le contenu n'est jamais cru tel quel : on revérifie l'achat auprès de l'API."""
-    if not saspay.is_valid_webhook(request.body, request.headers.get('X-Webhook-Signature', ''),
-                                   request.headers.get('X-Webhook-Timestamp', '')):
+def jemeni_webhook(request):
+    """Webhook Jɛmɛnipay (payment.success / payment.failed), signé en HMAC-SHA512.
+    Le contenu n'est jamais cru tel quel : l'achat est revérifié auprès de l'API."""
+    if not jemeni.is_valid_webhook(request.body, request.headers.get('X-Jemeni-Signature', '')):
         return JsonResponse({'error': 'Signature invalide'}, status=401)
     try:
         payload = json.loads(request.body)
     except ValueError:
         return JsonResponse({'error': 'JSON invalide'}, status=400)
-
-    event = payload.get('event', '')
-    data = payload.get('data') or {}
-    if not event.startswith('transaction.'):
+    data = payload.get('data') if isinstance(payload, dict) else None
+    if not isinstance(data, dict) or not str(payload.get('event', '')).startswith('payment.'):
         return JsonResponse({'status': 'ignored'})
 
-    tx_id, reference = str(data.get('id') or ''), str(data.get('reference') or '')
-    lookup = Q(transaction_id=tx_id) if tx_id else Q(pk__in=[])
-    if reference:
-        lookup |= Q(transaction_reference=reference)
-    purchases = list(TemplatePurchase.objects.filter(lookup, status=TemplatePurchase.PENDING))
-    if not purchases:
-        # Le webhook ne contient pas l'identifiant de session : on revérifie les achats en attente récents.
-        purchases = list(TemplatePurchase.objects.filter(
-            status=TemplatePurchase.PENDING, created_at__gte=timezone.now() - timedelta(days=1),
-        ).exclude(checkout_session_id='')[:25])
-    for purchase in purchases:
+    transaction_id = str(data.get('transaction_id') or '')
+    if not transaction_id:
+        return JsonResponse({'status': 'ignored'})
+    for purchase in TemplatePurchase.objects.filter(checkout_session_id=transaction_id):
         try:
             services.refresh_purchase(purchase)
-        except saspay.SasPayError:
-            logger.warning('Webhook SasPay : vérification impossible pour l\'achat %s', purchase.id)
-            return JsonResponse({'error': 'Vérification temporairement impossible'}, status=503)  # SasPay réessaiera
+        except jemeni.JemeniError:
+            logger.warning("Webhook Jemeni : vérification impossible pour l'achat %s", purchase.id)
+            return JsonResponse({'error': 'Vérification temporairement impossible'}, status=503)  # Jemeni réessaiera
     return JsonResponse({'status': 'ok'})

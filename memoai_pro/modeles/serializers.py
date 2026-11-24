@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from . import services
 from .models import MemoirTemplate, TemplatePurchase
 
 
@@ -35,6 +36,11 @@ class MemoirTemplateSerializer(serializers.ModelSerializer):
 class TemplatePurchaseSerializer(serializers.ModelSerializer):
     template_slug = serializers.CharField(source='template.slug', read_only=True)
     template_name = serializers.CharField(source='template.name', read_only=True)
+    checkout_url = serializers.SerializerMethodField()
+
+    def get_checkout_url(self, obj):
+        """Lien de paiement encore utilisable, sinon vide (lien expiré, ancien prestataire ou autre mode)."""
+        return obj.checkout_url if services.is_payable(obj) else ''
 
     class Meta:
         model = TemplatePurchase

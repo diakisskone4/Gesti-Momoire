@@ -264,7 +264,8 @@ class AdminStatsView(APIView):
             total=Count('id'),
         )
         from modeles.models import TemplatePurchase
-        templates = TemplatePurchase.objects.filter(status=TemplatePurchase.PAID).aggregate(
+        # Les paiements simulés (clés de test) ne sont jamais des ventes.
+        templates = TemplatePurchase.objects.filter(status=TemplatePurchase.PAID).exclude(provider='jemeni_test').aggregate(
             revenue=Sum('amount'), sold=Count('id'),
         )
         students = users_by_role.get('STUDENT', 0)

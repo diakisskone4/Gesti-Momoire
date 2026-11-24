@@ -303,11 +303,14 @@ else:
 STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
 
-# SasPay : paiement des modèles de mémoire (mobile money / carte, checkout hébergé)
-SASPAY_SECRET_KEY = os.environ.get('SASPAY_SECRET_KEY', '')
-SASPAY_API_URL = os.environ.get('SASPAY_API_URL', 'https://api.saspay.me/api/v1')
-SASPAY_WEBHOOK_SECRET = os.environ.get('SASPAY_WEBHOOK_SECRET', '')
-SASPAY_DEFAULT_COUNTRY = os.environ.get('SASPAY_DEFAULT_COUNTRY', 'ML')  # pays présélectionné sur la page de paiement
+# Jɛmɛnipay : paiement des modèles de mémoire (page de paiement hébergée).
+# Le mode découle de la clé publique : pk_live_… = argent réel, pk_test_… = bac à sable (paiements simulés).
+JEMENI_PUBLIC_KEY = os.environ.get('JEMENI_PUBLIC_KEY', '').strip()
+JEMENI_SECRET_KEY = os.environ.get('JEMENI_SECRET_KEY', '').strip()
+JEMENI_TOKEN = os.environ.get('JEMENI_TOKEN', '').strip()  # jeton utilisateur
+JEMENI_WEBHOOK_SECRET = os.environ.get('JEMENI_WEBHOOK_SECRET', '').strip()
+JEMENI_API_URL = os.environ.get('JEMENI_API_URL', 'https://jemeni.net/api')
+JEMENI_COUNTRY = os.environ.get('JEMENI_COUNTRY', 'ml')
 MODELE_PRICE = os.environ.get('MODELE_PRICE', '5000')  # prix d'un modèle (XOF) à sa création
 
 # IA : fournisseur au choix — "openrouter" (API compatible OpenAI) ou "anthropic" (API Claude)

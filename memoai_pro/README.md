@@ -40,17 +40,17 @@ L'URL du backend se règle avec `VITE_API_URL` (voir `.env.example`, défaut `ht
 | Jury | `/pro/login/jury` | `/jury` |
 | Administrateur | `/pro/login/admin` (inscription avec `ADMIN_REGISTRATION_CODE`) | `/admin` |
 
-## Modèles de mémoire payants (SasPay)
+## Modèles de mémoire payants (Jɛmɛnipay)
 
 Six modèles (Licence, Master sciences & techniques, gestion, sciences sociales, droit, thèse de doctorat),
 chacun avec sa page de garde (6 styles) et un plan commenté. Prix : 5 000 FCFA par modèle (`MODELE_PRICE`,
 modifiable ensuite dans l'admin Django).
 
 - Catalogue : `/modeles` (frontend) — API `/modeles/`.
-- Paiement : checkout hébergé SasPay (`SASPAY_SECRET_KEY`, `SASPAY_API_URL`). Le paiement n'est validé
-  qu'après vérification côté serveur (statut de session + transaction : statut, devise, montant).
-- Webhook (optionnel, recommandé en production) : dans le tableau de bord SasPay, créez un webhook vers
-  `https://<votre-domaine>/modeles/webhook/saspay/`, abonnez-le à `transaction.success` / `transaction.failed`
-  et copiez le secret de signature dans `SASPAY_WEBHOOK_SECRET`.
-- Sandbox : `SASPAY_API_URL=https://sandbox-api.saspay.me/api/v1` avec une clé `sk_test_...`.
+- Paiement : page hébergée Jɛmɛnipay (`JEMENI_PUBLIC_KEY`, `JEMENI_SECRET_KEY`, `JEMENI_TOKEN`). Le paiement n'est
+  validé qu'après vérification côté serveur (état de la transaction et montant).
+- Webhook (recommandé en production) : enregistrez `https://<votre-domaine>/modeles/webhook/jemeni/` pour
+  `payment.success` / `payment.failed` et copiez le secret (affiché une seule fois) dans `JEMENI_WEBHOOK_SECRET`.
+- Mode test : avec une clé `pk_test_…`, les paiements sont simulés (numéro 98745632). Les modèles obtenus ainsi
+  ne restent débloqués que tant que les clés de test sont utilisées. Argent réel : clés `pk_live_…`.
 - Le catalogue se met à jour depuis `modeles/catalog.py` : `python manage.py sync_modeles`.

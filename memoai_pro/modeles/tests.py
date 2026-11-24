@@ -1,12 +1,13 @@
-"""Tests des modèles de mémoire et du paiement SasPay (API simulée : aucun appel réel)."""
+"""Tests des modèles de mémoire et du paiement Jɛmɛnipay (API simulée : aucun appel réel)."""
 import hashlib
 import hmac
 import json
-import time
+from datetime import timedelta
 from decimal import Decimal
 from unittest import mock
 
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from projects.models import Chapter, Project
@@ -15,7 +16,15 @@ from .covers import cover_data, render_cover_html
 from .models import MemoirTemplate, TemplatePurchase
 
 PASSWORD = 'Motdepasse-Solide-2026'
-SESSION = {'id': 'sess-uuid-1', 'checkout_url': 'https://pay.saspay.me/c/abc', 'status': 'PENDING'}
+TX = '01m86jbwjce91t2dja8vgkf564'
+CHECKOUT = {'status': 'Success', 'message': 'ok', 'data': {
+    'checkout_url': f'https://jemeni.net/sandbox/pay/{TX}', 'expires_at': '2026-11-24T11:12:00+00:00',
+    'transaction': {'id': TX, 'amount': 5000, 'state': 1, 'reference': 'JP-1'}}}
+
+
+def payment_body(state, amount=5000, tx=TX):
+    return {'status': 'Success', 'message': 'Etat de votre transaction',
+            'data': {'id': tx, 'amount': amount, 'state': state, 'reference': 'JP-1'}}
 
 
 def make_user(email, role='STUDENT'):
@@ -28,8 +37,9 @@ def fake_response(status, body):
     return resp
 
 
-@override_settings(SASPAY_SECRET_KEY='sk_test_x', SASPAY_API_URL='https://sandbox.test/api/v1',
-                   SASPAY_WEBHOOK_SECRET='whsec_test', FRONTEND_URL='http://localhost:5173')
+@override_settings(JEMENI_PUBLIC_KEY='pk_live_x', JEMENI_SECRET_KEY='sk_live_x', JEMENI_TOKEN='jeton',
+                   JEMENI_API_URL='https://jemeni.test/api', JEMENI_WEBHOOK_SECRET='whsec_test',
+                   FRONTEND_URL='http://localhost:5173')
 class TemplatePurchaseTests(APITestCase):
     def setUp(self):
         self.user = make_user('etu@test.com')
@@ -38,7 +48,7 @@ class TemplatePurchaseTests(APITestCase):
         self.client.force_authenticate(self.user)
 
     def purchase(self):
-        with mock.patch('modeles.saspay.requests.request', return_value=fake_response(201, SESSION)) as req:
+        with mock.patch('modeles.jemeni.requests.request', return_value=fake_response(200, CHECKOUT)) as req:
             res = self.client.post(f'/modeles/{self.template.slug}/purchase/')
         return res, req
 
@@ -62,8 +72,8 @@ class TemplatePurchaseTests(APITestCase):
         self.assertTrue(data['owned'])
         self.assertTrue(data['structure'])  # conseils détaillés débloqués
         self.assertNotIn('APERÇU', self.client.get(f'/modeles/{free.slug}/cover/').data['html'])
-        # Rien à payer : aucune session SasPay n'est créée.
-        with mock.patch('modeles.saspay.requests.request') as req:
+        # Rien à payer : aucune page de paiement n'est créée.
+        with mock.patch('modeles.jemeni.requests.request') as req:
             res = self.client.post(f'/modeles/{free.slug}/purchase/')
         self.assertEqual(res.status_code, 400)
         req.assert_not_called()
@@ -79,20 +89,63 @@ class TemplatePurchaseTests(APITestCase):
         self.assertIn('APERÇU', res.data['html'])
         self.assertIn('République du Mali', res.data['html'])
 
-    def test_purchase_creates_saspay_checkout_session(self):
+    def test_purchase_creates_signed_checkout(self):
         res, req = self.purchase()
         self.assertEqual(res.status_code, 201)
-        self.assertEqual(res.data['checkout_url'], SESSION['checkout_url'])
+        self.assertEqual(res.data['checkout_url'], CHECKOUT['data']['checkout_url'])
         method, url = req.call_args.args
-        payload = req.call_args.kwargs['json']
-        self.assertEqual((method, url), ('POST', 'https://sandbox.test/api/v1/checkout-sessions/'))
-        self.assertEqual(req.call_args.kwargs['headers']['Authorization'], 'Bearer sk_test_x')
-        self.assertEqual(payload['amount'], '5000.00')
-        self.assertEqual(payload['currency'], 'XOF')
-        self.assertEqual(payload['customer_email'], 'etu@test.com')
+        headers, body = req.call_args.kwargs['headers'], req.call_args.kwargs['data'].decode()
+        self.assertEqual((method, url), ('POST', 'https://jemeni.test/api/live/payments/checkout'))
+        # Signature : HMAC-SHA512(SK + AK + MÉTHODE + URL + CORPS + TIMESTAMP), clé = SK
+        message = f"sk_live_xpk_live_xPOST{url}{body}{headers['auth-timestamp']}"
+        self.assertEqual(headers['auth-signature'],
+                         hmac.new(b'sk_live_x', message.encode(), hashlib.sha512).hexdigest())
+        self.assertEqual((headers['auth-apiKey'], headers['auth-token']), ('pk_live_x', 'jeton'))
+        self.assertNotIn('sandbox', headers)
+        self.assertNotIn('sk_live_x', str(headers))  # la clé secrète n'est jamais envoyée
+        payload = json.loads(body)
         purchase = TemplatePurchase.objects.get()
+        self.assertEqual((payload['amount'], payload['country_code']), (5000, 'ml'))
         self.assertEqual(payload['return_url'], f'http://localhost:5173/modeles?achat={purchase.id}')
         self.assertEqual(payload['metadata']['purchase_id'], purchase.id)
+        self.assertEqual((purchase.provider, purchase.checkout_session_id), ('jemeni', TX))
+
+    @override_settings(JEMENI_PUBLIC_KEY='pk_test_x', JEMENI_SECRET_KEY='sk_test_x')
+    def test_test_keys_use_sandbox(self):
+        _, req = self.purchase()
+        self.assertEqual(req.call_args.args[1], 'https://jemeni.test/api/sandbox/payments/checkout')
+        self.assertEqual(req.call_args.kwargs['headers']['sandbox'], 'true')
+        self.assertEqual(TemplatePurchase.objects.get().provider, 'jemeni_test')
+
+    def test_simulated_payments_unlock_templates_only_with_test_keys(self):
+        TemplatePurchase.objects.create(user=self.user, template=self.template, amount=5000, status='PAID',
+                                        provider='jemeni_test')
+        self.assertFalse(self.template.is_owned_by(self.user))  # clés réelles : un paiement simulé ne compte pas
+        mine = next(t for t in self.client.get('/modeles/').data if t['slug'] == self.template.slug)
+        self.assertFalse(mine['owned'])
+        with override_settings(JEMENI_PUBLIC_KEY='pk_test_x'):
+            self.assertTrue(self.template.is_owned_by(self.user))
+
+    def test_old_saspay_purchases(self):
+        """Achats SasPay : les payés restent acquis, les liens en attente ne sont plus proposés ni interrogés."""
+        old = TemplatePurchase.objects.create(user=self.user, template=self.template, amount=5000, provider='saspay',
+                                              checkout_session_id='sess-1', checkout_url='https://pay.saspay.me/c/abc')
+        with mock.patch('modeles.jemeni.requests.request') as req:
+            res = self.client.post(f'/modeles/achats/{old.id}/verify/')
+        req.assert_not_called()
+        self.assertEqual((res.data['status'], res.data['checkout_url']), ('PENDING', ''))
+        res, _ = self.purchase()
+        self.assertEqual(res.status_code, 201)  # nouvelle page Jɛmɛnipay, pas l'ancien lien
+        TemplatePurchase.objects.filter(pk=old.pk).update(status='PAID')
+        self.assertTrue(self.template.is_owned_by(self.user))
+
+    def test_expired_checkout_is_not_reused(self):
+        self.purchase()
+        TemplatePurchase.objects.update(created_at=timezone.now() - timedelta(minutes=40))
+        self.assertEqual(self.client.get('/modeles/achats/').data[0]['checkout_url'], '')
+        res, req = self.purchase()
+        self.assertEqual(res.status_code, 201)
+        req.assert_called_once()
 
     def test_second_click_reuses_pending_session(self):
         self.purchase()
@@ -101,43 +154,53 @@ class TemplatePurchaseTests(APITestCase):
         req.assert_not_called()
         self.assertEqual(TemplatePurchase.objects.count(), 1)
 
-    def test_saspay_error_is_reported(self):
-        with mock.patch('modeles.saspay.requests.request', return_value=fake_response(401, {'success': False})):
+    def test_provider_error_is_reported(self):
+        body = {'status': 'Error', 'message': 'Signature invalide', 'data': None}
+        with mock.patch('modeles.jemeni.requests.request', return_value=fake_response(403, body)):
             res = self.client.post(f'/modeles/{self.template.slug}/purchase/')
         self.assertEqual(res.status_code, 503)
         self.assertEqual(TemplatePurchase.objects.get().status, 'FAILED')
 
-    def _verify(self, session, payment=None):
-        responses = [fake_response(200, session)] + ([fake_response(200, payment)] if payment else [])
+    def _verify(self, body, status=200):
         purchase = TemplatePurchase.objects.get()
-        with mock.patch('modeles.saspay.requests.request', side_effect=responses):
-            return self.client.post(f'/modeles/achats/{purchase.id}/verify/')
+        with mock.patch('modeles.jemeni.requests.request', return_value=fake_response(status, body)) as req:
+            res = self.client.post(f'/modeles/achats/{purchase.id}/verify/')
+        self.assertEqual(req.call_args.args, ('GET', f'https://jemeni.test/api/live/payments/{TX}'))
+        return res
 
-    def test_verify_marks_paid_only_after_payment_check(self):
+    def test_verify_marks_paid_only_when_completed(self):
         self.purchase()
-        res = self._verify({'status': 'PENDING', 'transaction_id': None, 'transaction_status': None})
-        self.assertEqual(res.data['status'], 'PENDING')
-
-        paid_session = {'status': 'PAID', 'transaction_id': 'tx-1', 'transaction_status': 'SUCCESS',
-                        'transaction_reference': 'REF-1'}
-        payment = {'status': 'SUCCESS', 'requested_amount': '5000.00', 'currency': 'XOF',
-                   'debited_amount': '5200.00', 'reference': 'REF-1'}
-        res = self._verify(paid_session, payment)
+        for state in (0, 1):
+            self.assertEqual(self._verify(payment_body(state)).data['status'], 'PENDING')
+        res = self._verify(payment_body(2, amount='5000.00'))
         self.assertEqual(res.data['status'], 'PAID')
         self.assertTrue(self.template.is_owned_by(self.user))
-        self.assertEqual(TemplatePurchase.objects.get().amount_charged, Decimal('5200.00'))
+        purchase = TemplatePurchase.objects.get()
+        self.assertEqual((purchase.transaction_id, purchase.amount_charged), (TX, Decimal('5000.00')))
 
-    def test_underpaid_transaction_is_not_accepted(self):
+    def test_refused_payment_then_late_confirmation(self):
         self.purchase()
-        res = self._verify({'status': 'PAID', 'transaction_id': 'tx-1', 'transaction_status': 'SUCCESS'},
-                           {'status': 'SUCCESS', 'requested_amount': '100.00', 'currency': 'XOF'})
-        self.assertEqual(res.data['status'], 'PENDING')
+        self.assertEqual(self._verify(payment_body(3)).data['status'], 'FAILED')
+        self.assertFalse(self.template.is_owned_by(self.user))
+        # Un paiement finalement confirmé est toujours enregistré.
+        self.assertEqual(self._verify(payment_body(2)).data['status'], 'PAID')
+
+    def test_abandoned_payment_is_cancelled(self):
+        self.purchase()
+        TemplatePurchase.objects.update(created_at=timezone.now() - timedelta(hours=3))
+        self.assertEqual(self._verify(payment_body(1)).data['status'], 'CANCELLED')
+
+    def test_underpaid_or_foreign_transaction_is_not_accepted(self):
+        self.purchase()
+        self.assertEqual(self._verify(payment_body(2, amount=100)).data['status'], 'PENDING')
+        self.assertEqual(self._verify(payment_body(2, tx='autre')).data['status'], 'PENDING')
         self.assertFalse(self.template.is_owned_by(self.user))
 
-    def test_expired_session_is_cancelled(self):
+    def test_unknown_transaction_error_keeps_purchase_pending(self):
         self.purchase()
-        res = self._verify({'status': 'EXPIRED', 'transaction_id': None})
-        self.assertEqual(res.data['status'], 'CANCELLED')
+        res = self._verify({'status': 'Error', 'message': 'No query results', 'data': []}, status=500)
+        self.assertEqual(res.status_code, 502)
+        self.assertEqual(TemplatePurchase.objects.get().status, 'PENDING')
 
     def test_cannot_verify_someone_elses_purchase(self):
         self.purchase()
@@ -220,28 +283,32 @@ class TemplatePurchaseTests(APITestCase):
                 self.assertIn('PRÉSENTÉ PAR', first_page)
                 self.assertIn('KAYES', first_page.upper())
 
-    def _webhook(self, body, secret='whsec_test', ts=None):
+    def _webhook(self, body, secret='whsec_test'):
         raw = json.dumps(body).encode()
-        ts = str(ts or int(time.time()))
-        sig = hmac.new(secret.encode(), f'{ts}.'.encode() + raw, hashlib.sha256).hexdigest()
-        return self.client.generic('POST', '/modeles/webhook/saspay/', raw, content_type='application/json',
-                                   HTTP_X_WEBHOOK_SIGNATURE=sig, HTTP_X_WEBHOOK_TIMESTAMP=ts)
+        sig = hmac.new(secret.encode(), raw, hashlib.sha512).hexdigest()
+        return self.client.generic('POST', '/modeles/webhook/jemeni/', raw, content_type='application/json',
+                                   HTTP_X_JEMENI_SIGNATURE=sig)
 
-    def test_webhook_rejects_bad_signature_and_old_timestamp(self):
-        event = {'event': 'transaction.success', 'data': {'id': 'tx-1'}}
+    def test_webhook_rejects_bad_signature(self):
+        event = {'event': 'payment.success', 'data': {'transaction_id': TX}}
         self.assertEqual(self._webhook(event, secret='wrong').status_code, 401)
-        self.assertEqual(self._webhook(event, ts=int(time.time()) - 3600).status_code, 401)
+        with override_settings(JEMENI_WEBHOOK_SECRET=''):  # non configuré : tout est refusé
+            self.assertEqual(self._webhook(event, secret='').status_code, 401)
 
     def test_webhook_confirms_purchase_through_api(self):
         self.purchase()
-        responses = [
-            fake_response(200, {'status': 'PAID', 'transaction_id': 'tx-9', 'transaction_status': 'SUCCESS'}),
-            fake_response(200, {'status': 'SUCCESS', 'requested_amount': '5000.00', 'currency': 'XOF'}),
-        ]
-        with mock.patch('modeles.saspay.requests.request', side_effect=responses):
-            res = self._webhook({'event': 'transaction.success', 'data': {'id': 'tx-9', 'status': 'SUCCESS'}})
-        self.assertEqual(res.status_code, 200)
+        event = {'event': 'payment.success', 'data': {'transaction_id': TX, 'state': 2, 'amount': '5000'}}
+        # Le contenu du webhook n'est pas cru : l'API dit « en attente », l'achat reste en attente.
+        with mock.patch('modeles.jemeni.requests.request', return_value=fake_response(200, payment_body(1))):
+            self.assertEqual(self._webhook(event).status_code, 200)
+        self.assertEqual(TemplatePurchase.objects.get().status, 'PENDING')
+        with mock.patch('modeles.jemeni.requests.request', return_value=fake_response(200, payment_body(2))):
+            self.assertEqual(self._webhook(event).status_code, 200)
         self.assertEqual(TemplatePurchase.objects.get().status, 'PAID')
+        # Nouvel envoi du même événement : aucun effet, aucun appel.
+        with mock.patch('modeles.jemeni.requests.request') as req:
+            self.assertEqual(self._webhook(event).status_code, 200)
+        req.assert_not_called()
 
 
 class CoverRenderingTests(APITestCase):

@@ -25,7 +25,7 @@ const PURCHASE_STATUS: Record<string, string> = {
   PENDING: 'En attente de paiement', PAID: 'Payé', FAILED: 'Échoué', CANCELLED: 'Annulé / expiré',
 };
 
-/** Catalogue des modèles de mémoire payants (5 000 FCFA, paiement SasPay). */
+/** Catalogue des modèles de mémoire payants (5 000 FCFA, paiement Jɛmɛnipay). */
 export default function TemplatesPage() {
   const toast = useToast();
   const navigate = useNavigate();
@@ -57,11 +57,12 @@ export default function TemplatesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Retour de la page de paiement SasPay : /modeles?achat=<id>
+  // Retour de la page de paiement Jɛmɛnipay : /modeles?achat=<id>&transaction_id=…
   useEffect(() => {
-    const id = Number(searchParams.get('achat'));
+    const id = parseInt(searchParams.get('achat') ?? '', 10);
     if (!id) return;
     searchParams.delete('achat');
+    searchParams.delete('transaction_id');
     setSearchParams(searchParams, { replace: true });
     setReturnState({ status: 'checking' });
 
@@ -136,7 +137,7 @@ export default function TemplatesPage() {
 
           {returnState && (
             <div className={returnState.status === 'paid' ? 'ok' : returnState.status === 'failed' ? 'error' : 'note'} role="status">
-              {returnState.status === 'checking' && '⏳ Vérification de votre paiement auprès de SasPay…'}
+              {returnState.status === 'checking' && '⏳ Vérification de votre paiement auprès de Jɛmɛnipay…'}
               {returnState.status === 'paid' && `✅ Paiement confirmé : « ${returnState.name} » est à vous. Cliquez sur « Utiliser ce modèle ».`}
               {returnState.status === 'pending' && "⏳ Paiement pas encore confirmé. S'il a abouti sur votre téléphone, il apparaîtra d'ici quelques minutes (voir « Mes achats » ci-dessous)."}
               {returnState.status === 'failed' && "Le paiement n'a pas abouti ou la session a expiré. Vous pouvez relancer l'achat."}
@@ -193,8 +194,8 @@ export default function TemplatesPage() {
           </div>
 
           <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
-            🔒 Paiement sécurisé par SasPay : Orange Money, Moov Money, Mobi Cash, Wave, MTN MoMo ou carte bancaire.
-            Les frais de l'opérateur s'ajoutent au prix affiché. Le modèle est débloqué dès la confirmation du paiement.
+            🔒 Paiement sécurisé par Jɛmɛnipay : saisissez votre numéro Jɛmɛnipay, puis validez la demande dans
+            l'application Jɛmɛnipay de votre téléphone. Le modèle est débloqué dès la confirmation du paiement.
           </p>
 
           {purchases.length > 0 && (

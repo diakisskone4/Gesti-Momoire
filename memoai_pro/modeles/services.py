@@ -5,53 +5,64 @@ from django.db import transaction
 from django.utils import timezone
 
 from projects.models import Chapter
-from . import saspay
+from . import jemeni
 from .models import TemplatePurchase
 
 logger = logging.getLogger(__name__)
 
-# Une session SasPay en attente depuis moins de ce délai est réutilisée (évite les doubles paiements).
-REUSE_PENDING_FOR = timedelta(minutes=30)
-FINAL_SESSION_STATUSES = {'EXPIRED', 'CANCELLED', 'CANCELED'}
+# Une page de paiement Jɛmɛnipay expire au bout de 30 minutes.
+CHECKOUT_LIFETIME = timedelta(minutes=30)
+# En dessous de ce délai, la page existante est réutilisée (évite les doubles paiements).
+REUSE_PENDING_FOR = timedelta(minutes=25)
+# Sans confirmation au-delà de ce délai, l'achat est considéré comme abandonné.
+ABANDONED_AFTER = timedelta(hours=2)
+
+
+def is_payable(purchase):
+    return (purchase.status == TemplatePurchase.PENDING and bool(purchase.checkout_url)
+            and purchase.provider == jemeni.provider()
+            and purchase.created_at >= timezone.now() - CHECKOUT_LIFETIME)
 
 
 def reusable_pending_purchase(user, template):
     return (TemplatePurchase.objects
-            .filter(user=user, template=template, status=TemplatePurchase.PENDING,
+            .filter(user=user, template=template, status=TemplatePurchase.PENDING, provider=jemeni.provider(),
                     created_at__gte=timezone.now() - REUSE_PENDING_FOR)
             .exclude(checkout_url='')
             .first())
 
 
 def refresh_purchase(purchase):
-    """Interroge SasPay et met l'achat à jour. Ne se fie jamais au seul retour du navigateur :
-    la session doit être payée ET la transaction vérifiée (statut, devise, montant)."""
-    if purchase.status != TemplatePurchase.PENDING or not purchase.checkout_session_id:
+    """Interroge Jɛmɛnipay et met l'achat à jour. Ne se fie jamais au seul retour du navigateur ni au
+    contenu du webhook : la transaction doit être à l'état « payé », pour le bon montant.
+    Un achat annulé ou échoué reste vérifiable : un paiement confirmé tardivement est toujours enregistré."""
+    if purchase.status == TemplatePurchase.PAID or not purchase.checkout_session_id:
+        return purchase
+    if purchase.provider != jemeni.provider():
+        return purchase  # ancien achat SasPay, ou fait avec l'autre jeu de clés (test / réel)
+
+    payment = jemeni.get_payment(purchase.checkout_session_id)
+    if str(payment.get('id') or '') != purchase.checkout_session_id:
+        logger.error("Jemeni: transaction inattendue pour l'achat %s : %s", purchase.id, str(payment)[:300])
+        return purchase
+    state = jemeni.to_state(payment.get('state'))
+
+    if state == jemeni.STATE_COMPLETED:
+        amount = jemeni.to_decimal(payment.get('amount'))
+        if amount is None or amount < purchase.amount:
+            logger.error("Jemeni: montant incohérent pour l'achat %s : %s", purchase.id, str(payment)[:300])
+            return purchase
+        mark_paid(purchase, purchase.checkout_session_id,
+                  str(payment.get('reference') or purchase.transaction_reference), amount)
         return purchase
 
-    session = saspay.checkout_status(purchase.checkout_session_id)
-    session_status = str(session.get('status') or '').upper()
-    transaction_id = session.get('transaction_id') or ''
-
-    if session_status in FINAL_SESSION_STATUSES:
-        purchase.status = TemplatePurchase.CANCELLED
-        purchase.save(update_fields=['status', 'updated_at'])
-        return purchase
-
-    if not transaction_id or str(session.get('transaction_status') or '').upper() != 'SUCCESS':
-        # Paiement en cours ou échoué : le client peut encore réessayer sur la page SasPay.
-        return purchase
-
-    payment = saspay.verify_payment(transaction_id)
-    amount = saspay.to_decimal(payment.get('requested_amount') or payment.get('amount'))
-    if (str(payment.get('status') or '').upper() != 'SUCCESS'
-            or (payment.get('currency') or purchase.currency) != purchase.currency
-            or amount is None or amount < purchase.amount):
-        logger.error('SasPay: paiement %s incohérent pour l\'achat %s : %s', transaction_id, purchase.id, payment)
-        return purchase
-
-    mark_paid(purchase, transaction_id, payment.get('reference') or session.get('transaction_reference') or '',
-              saspay.to_decimal(payment.get('debited_amount')))
+    if purchase.status == TemplatePurchase.PENDING:
+        if state in jemeni.STATES_FAILED:
+            purchase.status = TemplatePurchase.FAILED
+            purchase.save(update_fields=['status', 'updated_at'])
+        elif purchase.created_at < timezone.now() - ABANDONED_AFTER:
+            purchase.status = TemplatePurchase.CANCELLED
+            purchase.save(update_fields=['status', 'updated_at'])
     return purchase
 
 

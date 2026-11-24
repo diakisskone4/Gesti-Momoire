@@ -34,12 +34,12 @@ describe('TemplatesPage', () => {
     localStorage.setItem('memoai_user', JSON.stringify({ id: 1, email: 'a@b.c', first_name: 'A', last_name: 'B', full_name: 'A B', role: 'STUDENT' }));
   });
 
-  it("affiche le prix et redirige vers SasPay à l'achat", async () => {
+  it("affiche le prix et redirige vers Jɛmɛnipay à l'achat", async () => {
     const assign = vi.fn();
     vi.stubGlobal('location', { ...window.location, assign });
     vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
       if (url.includes('/modeles/licence-classique/purchase/') && init?.method === 'POST') {
-        return json({ id: 7, checkout_url: 'https://pay.saspay.me/c/xyz', status: 'PENDING' }, 201);
+        return json({ id: 7, checkout_url: 'https://jemeni.net/sandbox/pay/xyz', status: 'PENDING' }, 201);
       }
       if (url.includes('/cover/')) return json({ html: '<p>garde</p>' });
       if (url.includes('/modeles/achats/')) return json([]);
@@ -56,7 +56,7 @@ describe('TemplatesPage', () => {
     expect(await screen.findByText(TEMPLATE.name)).toBeInTheDocument();
     expect(screen.getAllByText(/(^|\D)5\s?000 FCFA/u).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Acheter' }));
-    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('https://pay.saspay.me/c/xyz'));
+    await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('https://jemeni.net/sandbox/pay/xyz'));
     vi.unstubAllGlobals();
   });
 });
